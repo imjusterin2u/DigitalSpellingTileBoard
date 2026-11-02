@@ -108,6 +108,8 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
 .trow{display:flex;gap:6px}
 .side{margin-left:auto;display:flex;flex-direction:column;gap:10px;padding:0 9px 0 0}
 .clears{display:flex;gap:8px}
+.libbtn{min-height:46px;border-radius:10px;border:2px solid var(--accent);background:var(--surface);color:var(--accent);font-weight:700;font-size:16px;margin-top:2px}
+.libbtn[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
 .btn{min-height:44px;padding:0 14px;border-radius:10px;border:0;background:var(--accent);color:var(--accent-ink);font-weight:700;flex:1;white-space:nowrap}
 .frame{position:relative;width:max(176px,calc(var(--t)*3.3));height:max(46px,calc(var(--t)*.86));border:1.5px solid var(--card-edge);border-radius:4px;background:var(--card);color:var(--tile-ink);
   display:flex;align-items:center;justify-content:center;gap:10px;padding:0 10px;touch-action:none;
@@ -120,7 +122,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
 .frame .dash{font-size:26px}
 
 /* Panels: library, students, themes */
-.library{position:absolute;top:0;right:0;bottom:0;width:min(620px,100%);z-index:6;background:var(--surface);color:var(--ink);border-radius:12px;
+.library{position:absolute;top:0;right:0;bottom:0;width:min(680px,100%);z-index:6;background:var(--surface);color:var(--ink);border-radius:12px;
   box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 14%,transparent),-8px 0 24px rgba(0,0,0,.16);display:flex;flex-direction:column;min-height:0}
 .lib-head{display:flex;align-items:center;gap:8px;padding:10px 10px 0;flex-wrap:wrap}
 .tabs{display:flex;gap:4px;background:var(--paper);padding:4px;border-radius:12px;margin-right:auto;flex-wrap:wrap}
@@ -209,7 +211,6 @@ input.field{flex:1;min-width:0;min-height:48px;border-radius:10px;border:1.5px s
     <span class="pill" id="pill" data-s="local"><i></i><span>Saved on this iPad</span></span>
     <label class="stepctl"><select id="step" aria-label="Select a step"></select></label>
     <button class="ctl" id="themeBtn">Theme</button>
-    <button class="ctl" id="libToggle" aria-pressed="false">Card Library</button>
     <button class="ctl" id="drawToggle" aria-pressed="false">✎ Mark Up</button>
   </header>
 
@@ -676,6 +677,7 @@ FRAMES.forEach(f => {
   bindSpec(b, { kind:'card', type:f.type, text:'', needsText:true });
   side.appendChild(b);
 });
+side.insertAdjacentHTML('beforeend', '<button class="libbtn" id="libToggle" aria-pressed="false">Card Library</button>');
 const stepSel = $('#step');
 for (let i = 1; i <= 12; i++) stepSel.insertAdjacentHTML('beforeend', `<option value="${i}">Step ${i}</option>`);
 stepSel.insertAdjacentHTML('beforeend', '<option value="all">All tiles</option>');
