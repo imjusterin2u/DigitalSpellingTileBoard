@@ -50,7 +50,7 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
 .work{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;padding-block:10px}
 .boardwrap{position:relative;flex:1 1 auto;min-height:110px;display:flex;align-items:center;justify-content:center}
 .boardbox{position:relative}
-.board{position:absolute;left:0;top:0;width:1200px;height:400px;transform-origin:0 0;--t:72px;
+.board{position:absolute;left:0;top:0;width:1200px;height:400px;transform-origin:0 0;--t:90px;
   background:var(--board);border-radius:12px;box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 12%,transparent),0 3px 10px rgba(0,0,0,.08);touch-action:none;overflow:hidden;transition:background .25s}
 .rowband{position:absolute;left:0;right:0;transition:background .15s}
 .rowband.active{background:color-mix(in srgb,var(--accent) 8%,transparent)}
@@ -449,7 +449,7 @@ function persist(path, value){
   localTimer = setTimeout(saveLocalCopy, 300);
 }
 function saveLocalCopy(){
-  const copy = { pieces:board.pieces, strokes:board.strokes, step:board.step, theme:board.theme };
+  const copy = { pieces:board.pieces, strokes:board.strokes, step:board.step, theme:board.theme, v:board.v };
   if (student) ls.set('tb-cache-' + student.id, copy); else ls.set('tb-practice', copy);
 }
 
@@ -513,6 +513,14 @@ function normalize(){
   for (const k of ['pieces','strokes','live','presence']) if (!board[k] || typeof board[k] !== 'object') board[k] = {};
   if (!board.step) board.step = d.step;
   if (!board.theme) board.theme = d.theme;
+  // Boards saved before the bigger board tiles: spread them out so they don't overlap.
+  if (!board.v){
+    const had = Object.keys(board.pieces).length;
+    for (const m of Object.values(board.pieces)) m.x = Math.round(Math.min(m.x * 1.25, LW - 100) * 10) / 10;
+    board.v = 2;
+    if (had){ persist('pieces', board.pieces); }
+    persist('v', 2);
+  }
 }
 function presenceCount(){
   const now = Date.now();
@@ -727,7 +735,7 @@ function startGhost(){
   if (d.src.from === 'board'){ d.model = getP(d.src.id); d.originEl.classList.add('lifting'); bankzone.classList.add('removing'); }
   else d.model = d.src.spec;
   const g = visual(d.model); g.classList.add('ghost');
-  g.style.setProperty('--t', '72px');
+  g.style.setProperty('--t', '90px');
   g.style.transform = `scale(${S * 1.06})`;
   dragLayer.appendChild(g); d.ghost = g;
   const gw = g.offsetWidth * S * 1.06, gh = g.offsetHeight * S * 1.06;
