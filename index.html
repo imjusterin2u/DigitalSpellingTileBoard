@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>WRS Tile Board</title>
+<title>Digital Spelling Tile Board</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
@@ -161,6 +161,10 @@ input.field{flex:1;min-width:0;min-height:48px;border-radius:10px;border:1.5px s
 .addrow{display:flex;gap:8px}
 .note{font-size:13px;color:var(--muted);margin:0;line-height:1.4}
 .err{color:var(--danger);font-weight:700;margin:0;font-size:15px}
+.tool{display:flex;flex-direction:column;gap:10px;padding-top:14px;border-top:1px solid var(--edge)}
+.tool h3{margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.tool .act.small{align-self:flex-start}
+.sel{min-height:48px;border-radius:10px;border:1.5px solid var(--edge);padding:0 12px;font:700 17px var(--f-ui);background:var(--surface);color:var(--ink)}
 .themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .theme{border-radius:12px;border:1.5px solid var(--edge);background:var(--paper);padding:8px;display:flex;flex-direction:column;gap:6px;color:var(--ink);font-weight:700;text-align:left}
 .theme[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
@@ -207,12 +211,13 @@ input.field{flex:1;min-width:0;min-height:48px;border-radius:10px;border:1.5px s
 <body>
 <div class="app">
   <header class="bar gutter">
-    <div class="brand"><span class="mark" aria-hidden="true"><i style="background:var(--vowel)"></i><i style="background:var(--cons)"></i><i style="background:var(--weld)"></i></span>WRS Tile Board</div>
+    <div class="brand"><span class="mark" aria-hidden="true"><i style="background:var(--vowel)"></i><i style="background:var(--cons)"></i><i style="background:var(--weld)"></i></span>Digital Spelling Tile Board</div>
     <button class="ctl who" id="whoBtn">Practice board</button>
     <span class="pill" id="pill" data-s="local"><i></i><span>Saved on this iPad</span></span>
     <label class="stepctl"><select id="step" aria-label="Select a step"></select></label>
     <button class="ctl" id="themeBtn">Theme</button>
     <button class="ctl" id="drawToggle" aria-pressed="false">✎ Mark Up</button>
+    <button class="ctl" id="toolsBtn" aria-label="Teacher Tools">⚙ Teacher Tools</button>
   </header>
 
   <main class="work gutter">
@@ -302,12 +307,29 @@ input.field{flex:1;min-width:0;min-height:48px;border-radius:10px;border:1.5px s
     <p class="err" id="whoErr" hidden></p>
     <div class="students" id="stuList"></div>
     <button class="practice" id="practiceBtn">Practice board · saved on this iPad only</button>
-    <form class="addrow" id="stuAdd">
-      <input class="field" id="stuInput" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Add a student (first name or initials)" maxlength="24">
-      <button class="act small primary" type="submit">Add</button>
-    </form>
-    <div class="dlg-head"><p class="note">Names are visible to anyone with this page's link, so first names or initials work best.</p>
-      <button class="act small" id="stuEdit" aria-pressed="false">Remove students</button></div>
+    <button class="act small" id="stuEdit" hidden>Done removing</button>
+  </div>
+</div>
+
+<!-- Teacher Tools -->
+<div class="modal-wrap center" id="toolsWrap" hidden>
+  <div class="dialog" id="toolsDlg" role="dialog" aria-modal="true" aria-labelledby="toolsTitle" tabindex="-1">
+    <div class="dlg-head"><h2 id="toolsTitle">Teacher Tools</h2><button class="act small" id="toolsClose">Done</button></div>
+    <section class="tool">
+      <h3><label for="program">Program</label></h3>
+      <select class="sel" id="program"></select>
+      <p class="note" id="programNote"></p>
+    </section>
+    <section class="tool">
+      <h3>Students</h3>
+      <p class="err" id="toolsErr" hidden></p>
+      <form class="addrow" id="stuAdd">
+        <input class="field" id="stuInput" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Add a student (first name or initials)" maxlength="24">
+        <button class="act small primary" type="submit">Add</button>
+      </form>
+      <button class="act small" id="stuManage">Remove students…</button>
+      <p class="note">Names are visible to anyone with this page's link, so first names or initials work best.</p>
+    </section>
   </div>
 </div>
 
@@ -367,6 +389,12 @@ const BANK_TABS = {
     { label:'Step 9 vowel teams', rows:[['ai','ay','ee','ey'],['oa','oe','ue'],['oi','oy','au','aw'],['ou','ow','oo'],['ea','eu','ew','ui']] },
     { label:'Steps 11 and 12', rows:[['igh','eigh','ie','ei'],['gh','gn','kn','mb'],['mn','rh','wr','que'],['_vowel','_cons','_weld']] },
   ],
+};
+const PROGRAMS = {
+  wrs:  { name:'Wilson Reading System® sequence (Steps 1–12)', steps:true,
+          note:'Tiles appear by Step, following the WRS Scope & Sequence. The Step menu shows at the top. Saved with each student.' },
+  open: { name:'Open board (all tiles, no steps)', steps:false,
+          note:'Every tile is available and the Step menu is hidden. Saved with each student.' },
 };
 const FRAMES = [{ type:'syll', label:'Syllable' }, { type:'base', label:'Base' }, { type:'suffix', label:'Suffix' }, { type:'prefix', label:'Prefix' }];
 const TYPE_NAME = { syll:'Syllable card', base:'Base element card', prefix:'Prefix card', suffix:'Suffix card' };
@@ -513,6 +541,7 @@ function normalize(){
   for (const k of ['pieces','strokes','live','presence']) if (!board[k] || typeof board[k] !== 'object') board[k] = {};
   if (!board.step) board.step = d.step;
   if (!board.theme) board.theme = d.theme;
+  if (!PROGRAMS[board.program]) board.program = 'wrs';
   // Boards saved before the bigger board tiles: spread them out so they don't overlap.
   if (!board.v){
     const had = Object.keys(board.pieces).length;
@@ -598,7 +627,8 @@ function reconcile(){
   }
   for (const id of [...els.keys()]) if (!board.pieces[id]){ els.get(id).remove(); els.delete(id); if (delFor === id) hideTileDel(); }
   redrawMarks();
-  if (board.step !== lastStep){ lastStep = board.step; $('#step').value = board.step; applyStep(); }
+  const stepKey = board.program + '|' + board.step;
+  if (stepKey !== lastStep){ lastStep = stepKey; $('#step').value = board.step; applyStep(); }
   applyTheme(board.theme);
   renderRemoteGhosts();
   if (status === 'live') setStatus('live');
@@ -691,14 +721,18 @@ FRAMES.forEach(f => {
 const stepSel = $('#step');
 for (let i = 1; i <= 12; i++) stepSel.insertAdjacentHTML('beforeend', `<option value="${i}">Step ${i}</option>`);
 stepSel.insertAdjacentHTML('beforeend', '<option value="all">All tiles</option>');
-stepSel.addEventListener('change', () => { board.step = stepSel.value; lastStep = board.step; persist('step', board.step); applyStep(); });
+stepSel.addEventListener('change', () => { board.step = stepSel.value; lastStep = board.program + '|' + board.step; persist('step', board.step); applyStep(); });
 document.querySelectorAll('#banktabs button').forEach(b => b.addEventListener('click', () => { bankTab = +b.dataset.bt; ls.set('tb-banktab', bankTab); applyStep(); }));
 
 function applyStep(){
-  const s = board.step, n = s === 'all' ? 99 : +s;
+  const prog = PROGRAMS[board.program] || PROGRAMS.wrs;
+  document.querySelector('.stepctl').hidden = !prog.steps;
+  const s = board.step, n = (!prog.steps || s === 'all') ? 99 : +s;
   const tabsOn = n >= 7;
   $('#banktabs').hidden = !tabsOn;
   const tab = tabsOn ? bankTab : 1;
+  const tabNames = prog.steps ? ['Sounds · Steps 1–6','Sounds · Steps 7–12'] : ['Basic sounds','Advanced sounds'];
+  document.querySelectorAll('#banktabs button').forEach((b, i) => { b.textContent = tabNames[i]; });
   document.querySelectorAll('#banktabs button').forEach(b => b.setAttribute('aria-selected', +b.dataset.bt === tab));
   bank.querySelectorAll('.group').forEach(g => { g.hidden = +g.dataset.tab !== tab; });
   bank.querySelectorAll('button[data-code]').forEach(b => { b.hidden = (STEP_INTRO[b.dataset.code] || 1) > n; });
@@ -1079,12 +1113,16 @@ canvas.addEventListener('pointercancel', endStroke);
 const whoWrap = $('#whoWrap');
 let stuCache = ls.get('tb-students', {}), stuEdit = false, stuArm = null;
 const AV = ['var(--vowel)','var(--cons)','var(--weld)'];
-function openWho(){ whoWrap.hidden = false; $('#whoDlg').focus({ preventScroll:true }); renderStudents(); loadStudents(); }
-function closeWho(){ whoWrap.hidden = true; stuEdit = false; stuArm = null; $('#stuEdit').setAttribute('aria-pressed', false); }
-$('#whoBtn').addEventListener('click', openWho);
+function openWho(edit){
+  stuEdit = !!edit; stuArm = null; $('#stuEdit').hidden = !stuEdit; $('#practiceBtn').hidden = stuEdit;
+  $('#whoTitle').textContent = stuEdit ? 'Remove students' : 'Whose board?';
+  whoWrap.hidden = false; $('#whoDlg').focus({ preventScroll:true }); renderStudents(); loadStudents();
+}
+function closeWho(){ whoWrap.hidden = true; stuEdit = false; stuArm = null; }
+$('#whoBtn').addEventListener('click', () => openWho(false));
 $('#whoClose').addEventListener('click', closeWho);
 whoWrap.addEventListener('pointerdown', e => { if (e.target === whoWrap) closeWho(); });
-$('#stuEdit').addEventListener('click', () => { stuEdit = !stuEdit; stuArm = null; $('#stuEdit').setAttribute('aria-pressed', stuEdit); $('#stuEdit').textContent = stuEdit ? 'Done removing' : 'Remove students'; renderStudents(); });
+$('#stuEdit').addEventListener('click', closeWho);
 async function loadStudents(){
   const err = $('#whoErr');
   try {
@@ -1115,7 +1153,7 @@ function renderStudents(){
     });
     list.appendChild(b);
   });
-  if (!list.children.length) list.innerHTML = '<p class="note" style="grid-column:1 / -1">No students yet. Add one below.</p>';
+  if (!list.children.length) list.innerHTML = '<p class="note" style="grid-column:1 / -1">No students yet. Add them in Teacher Tools.</p>';
   $('#practiceBtn').setAttribute('aria-current', !student);
 }
 $('#practiceBtn').addEventListener('click', () => { selectStudent(null); closeWho(); });
@@ -1128,10 +1166,10 @@ $('#stuAdd').addEventListener('submit', async e => {
     if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'locked' : 'http');
     stuCache[id] = { name }; ls.set('tb-students', stuCache);
     $('#stuInput').value = '';
-    selectStudent({ id, name }); closeWho();
+    selectStudent({ id, name }); closeTools(); toast(name + ' added');
   } catch (err) {
-    $('#whoErr').hidden = false;
-    $('#whoErr').textContent = err.message === 'locked' ? 'The database is locked, so the student wasn’t added. Update the rules (see the README).' : 'Couldn’t add the student. Check the internet connection.';
+    $('#toolsErr').hidden = false;
+    $('#toolsErr').textContent = err.message === 'locked' ? 'The database is locked, so the student wasn’t added. Update the rules (see the README).' : 'Couldn’t add the student. Check the internet connection.';
   }
 });
 async function removeStudent(id){
@@ -1162,6 +1200,21 @@ window.addEventListener('pagehide', () => { if (student) fetch(dbUrl(`boards/${s
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && student && (!es || es.readyState === 2)){ disconnect(); connect(); }
 });
+
+/* =================== Teacher Tools =================== */
+const toolsWrap = $('#toolsWrap'), progSel = $('#program');
+for (const [k, p] of Object.entries(PROGRAMS)) progSel.insertAdjacentHTML('beforeend', `<option value="${k}">${esc(p.name)}</option>`);
+function renderTools(){
+  progSel.value = board.program || 'wrs';
+  $('#programNote').textContent = (PROGRAMS[progSel.value] || PROGRAMS.wrs).note + (student ? '' : ' (Practice board: saved on this iPad.)');
+  $('#toolsErr').hidden = true;
+}
+function closeTools(){ toolsWrap.hidden = true; }
+$('#toolsBtn').addEventListener('click', () => { renderTools(); toolsWrap.hidden = false; $('#toolsDlg').focus({ preventScroll:true }); });
+$('#toolsClose').addEventListener('click', closeTools);
+toolsWrap.addEventListener('pointerdown', e => { if (e.target === toolsWrap) closeTools(); });
+progSel.addEventListener('change', () => { board.program = progSel.value; persist('program', board.program); lastStep = null; reconcile(); renderTools(); });
+$('#stuManage').addEventListener('click', () => { closeTools(); openWho(true); });
 
 /* =================== Themes =================== */
 const themeWrap = $('#themeWrap');
@@ -1200,7 +1253,7 @@ fontsReady.then(() => {
   selectStudent(startWith);
   if (ls.get('tb-libopen', false)) setLib(true);
   if (firstVisit){
-    board.step = '6'; lastStep = null; persist('step', '6'); reconcile();
+    board.step = '6'; lastStep = null; persist('step', '6'); persist('program', 'wrs'); reconcile();
     ['c','a','m','p'].forEach(ch => addPieces([{ kind:'tile', cls:clsOf(ch), text:ch }], 0, null));
     addPieces([{ kind:'card', type:'suffix', text:'ing' }], 0, null);
     addPieces(['fan','tas','tic'].map(t => ({ kind:'card', type:'syll', text:t })), 1, null);
