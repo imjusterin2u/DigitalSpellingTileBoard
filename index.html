@@ -1,1 +1,1198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>WRS Tile Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<style>
+/* Theme tokens are set from THEMES in the script. Tile colors never change: they carry meaning. */
+:root{
+  --paper:#ECEFF3; --surface:#FFFFFF; --ink:#1E2731; --muted:#5A6573; --edge:#C9D1DB;
+  --board:#FFFFFF; --board-muted:#5A6573; --bar:#1F3550; --bar-ink:#F3F6FA; --accent:#2C6CB0; --accent-ink:#FFFFFF; --line:#BDCCE3;
+  --cons:#F4E5A1; --vowel:#E8C4BB; --weld:#C7D6B1; --tile-ink:#24201B;
+  --fix:#F6EF7C; --fix-edge:#BFB540; --card:#FFFFFF; --card-edge:#8C97A4; --danger:#B23A3A;
+  --f-tile:'Andika','Trebuchet MS',system-ui,sans-serif;
+  --f-ui:'Atkinson Hyperlegible','Segoe UI',system-ui,-apple-system,sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--f-ui);font-size:16px;overflow:hidden;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+  touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;
+  transition:background .25s}
+input{-webkit-user-select:text;user-select:text}
+button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.app{height:100%;display:flex;flex-direction:column}
+.gutter{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 
+/* Header */
+.bar{background:var(--bar);color:var(--bar-ink);display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;padding-block:9px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:19px;margin-right:auto;white-space:nowrap}
+.brand .mark{display:flex;gap:3px}
+.brand .mark i{display:block;width:10px;height:15px;border-radius:2px}
+.ctl{min-height:44px;padding:0 14px;border-radius:10px;border:1px solid color-mix(in srgb,var(--bar-ink) 30%,transparent);background:color-mix(in srgb,var(--bar-ink) 9%,transparent);color:var(--bar-ink);font-weight:700;display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.ctl[aria-pressed="true"]{background:var(--bar-ink);color:var(--bar);border-color:var(--bar-ink)}
+.who{max-width:260px;overflow:hidden;text-overflow:ellipsis}
+.pill{display:inline-flex;align-items:center;gap:7px;font-size:14px;font-weight:700;padding:0 4px;white-space:nowrap}
+.pill i{width:10px;height:10px;border-radius:50%;background:#9AA5B1;display:block}
+.pill[data-s="live"] i{background:#3CC46B;box-shadow:0 0 0 3px rgba(60,196,107,.25)}
+.pill[data-s="connecting"] i{background:#E8B54A}
+.pill[data-s="offline"] i,.pill[data-s="locked"] i{background:#E05A5A}
+.stepctl select{min-height:44px;border-radius:10px;border:0;padding:0 10px;font:700 17px var(--f-ui);background:var(--surface);color:var(--ink)}
+
+/* Work area */
+.work{flex:1;min-height:0;display:flex;flex-direction:column;gap:10px;padding-block:10px}
+.boardwrap{position:relative;flex:1 1 auto;min-height:110px;display:flex;align-items:center;justify-content:center}
+.boardbox{position:relative}
+.board{position:absolute;left:0;top:0;width:1200px;height:400px;transform-origin:0 0;--t:72px;
+  background:var(--board);border-radius:12px;box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 12%,transparent),0 3px 10px rgba(0,0,0,.08);touch-action:none;overflow:hidden;transition:background .25s}
+.rowband{position:absolute;left:0;right:0;transition:background .15s}
+.rowband.active{background:color-mix(in srgb,var(--accent) 8%,transparent)}
+.rowband.hover{background:color-mix(in srgb,var(--accent) 16%,transparent)}
+.gline{position:absolute;left:14px;right:14px;height:6px;margin-top:-3px;border-radius:3px;background:var(--line)}
+#pieces{position:absolute;inset:0;z-index:2}
+#marks{position:absolute;left:0;top:0;width:1200px;height:400px;z-index:3;pointer-events:none}
+.board.drawing #marks{pointer-events:auto;cursor:crosshair}
+.board-hint{position:absolute;right:22px;top:22px;font-size:17px;color:var(--board-muted);z-index:1}
+.rghost{position:absolute;z-index:4;opacity:.55;pointer-events:none;outline:3px dashed var(--accent);outline-offset:3px}
+
+/* Tiles and cards */
+.tile{width:var(--t);height:var(--t);display:grid;place-items:center;border:0;border-radius:5px;padding:0;
+  font:400 calc(var(--t)*.56)/1 var(--f-tile);color:var(--tile-ink);
+  box-shadow:inset 0 -3px 0 rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.22);touch-action:none}
+.tile[data-len="3"]{font-size:calc(var(--t)*.46)}
+.tile[data-len="4"]{font-size:calc(var(--t)*.38)}
+.tile[data-len="5"],.tile[data-len="6"]{font-size:calc(var(--t)*.3)}
+.tile .txt{transform:translateY(-.04em)}
+.cons{background:var(--cons)} .vowel{background:var(--vowel)} .weld{background:var(--weld)}
+.blank .txt{color:rgba(0,0,0,.28);font:700 calc(var(--t)*.4) var(--f-ui)}
+.card{height:calc(var(--t)*1.06);min-width:calc(var(--t)*1.2);padding:0 calc(var(--t)*.24);display:inline-flex;align-items:center;justify-content:center;gap:calc(var(--t)*.1);
+  background:var(--card);border:1.5px solid var(--card-edge);border-radius:4px;white-space:nowrap;
+  font:400 calc(var(--t)*.58)/1 var(--f-tile);color:var(--tile-ink);box-shadow:0 1px 2px rgba(0,0,0,.2);touch-action:none}
+.card.prefix,.card.suffix{background:var(--fix);border-color:var(--fix-edge)}
+.card .txt{transform:translateY(-.04em)}
+/* The hyphen is drawn as a bar so it can never read as an apostrophe */
+.dash{display:block;width:.32em;height:.085em;min-height:2px;border-radius:1px;background:currentColor;opacity:.75;flex:none}
+.card.empty{min-width:calc(var(--t)*1.8)}
+.piece{position:absolute;cursor:grab}
+.piece.lifting{opacity:.25}
+#dragLayer{position:fixed;inset:0;pointer-events:none;z-index:50}
+.ghost{position:absolute;transform-origin:0 0;box-shadow:0 12px 26px rgba(0,0,0,.28)}
+.ghost.outside{outline:4px solid var(--danger);opacity:.8}
+.pulse{animation:pulse .25s ease-out}
+@keyframes pulse{50%{transform:scale(.92)}}
+#tileDel{position:absolute;z-index:5;width:54px;height:54px;border-radius:50%;border:4px solid var(--board);background:var(--danger);color:#fff;font:700 30px/1 var(--f-ui);display:grid;place-items:center;box-shadow:0 2px 6px rgba(0,0,0,.25)}
+
+/* Markup tools (screen space) */
+.marktools{position:absolute;top:8px;right:8px;z-index:6;display:flex;align-items:center;gap:6px;background:var(--surface);color:var(--ink);padding:6px;border-radius:14px;box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 14%,transparent),0 6px 18px rgba(0,0,0,.18);flex-wrap:wrap;max-width:calc(100% - 16px)}
+.swatch{width:40px;height:40px;border-radius:50%;border:3px solid var(--surface);box-shadow:0 0 0 1px var(--edge)}
+.swatch[aria-pressed="true"]{box-shadow:0 0 0 3px var(--ink)}
+.mt-btn{min-height:40px;padding:0 12px;border-radius:10px;border:1px solid var(--edge);background:var(--surface);color:var(--ink);font-weight:700}
+.mt-btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+
+/* Bank */
+.bankzone{position:relative;flex:0 1 auto;max-height:52%;min-height:220px;display:flex;flex-direction:column}
+.bankzone.removing::after{content:"Drop here to remove";position:absolute;inset:0;z-index:8;border:3px dashed var(--danger);border-radius:10px;
+  background:color-mix(in srgb,var(--danger) 10%,transparent);color:var(--danger);display:grid;place-items:center;font:700 22px var(--f-ui);pointer-events:none}
+.banktabs{display:flex;gap:4px;align-self:flex-start;background:color-mix(in srgb,var(--ink) 8%,transparent);padding:3px;border-radius:10px;margin-bottom:8px}
+.banktabs button{min-height:36px;padding:0 14px;border:0;border-radius:8px;background:transparent;color:var(--muted);font-weight:700;font-size:15px}
+.banktabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.14)}
+.bank{--t:var(--bt,60px);flex:1;min-height:0;overflow:auto;display:flex;flex-wrap:wrap;align-content:flex-start;gap:14px 24px;padding:9px 2px 6px}
+.group{display:flex;flex-direction:column;gap:6px}
+.trow{display:flex;gap:6px}
+.side{margin-left:auto;display:flex;flex-direction:column;gap:10px;padding:0 9px 0 0}
+.clears{display:flex;gap:8px}
+.btn{min-height:44px;padding:0 14px;border-radius:10px;border:0;background:var(--accent);color:var(--accent-ink);font-weight:700;flex:1;white-space:nowrap}
+.frame{position:relative;width:max(176px,calc(var(--t)*3.3));height:max(46px,calc(var(--t)*.86));border:1.5px solid var(--card-edge);border-radius:4px;background:var(--card);color:var(--tile-ink);
+  display:flex;align-items:center;justify-content:center;gap:10px;padding:0 10px;touch-action:none;
+  box-shadow:4px -4px 0 -1.5px var(--card),4px -4px 0 0 var(--card-edge),8px -8px 0 -1.5px var(--card),8px -8px 0 0 var(--card-edge)}
+.frame.fix{background:var(--fix);border-color:var(--fix-edge);
+  box-shadow:4px -4px 0 -1.5px var(--fix),4px -4px 0 0 var(--fix-edge),8px -8px 0 -1.5px var(--fix),8px -8px 0 0 var(--fix-edge)}
+.frame .lbl{display:flex;flex-direction:column;align-items:center;line-height:1.15}
+.frame b{font-size:14px;letter-spacing:.06em;text-transform:uppercase}
+.frame small{font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#5A6573}
+.frame .dash{font-size:26px}
+
+/* Panels: library, students, themes */
+.library{position:absolute;top:0;right:0;bottom:0;width:min(620px,100%);z-index:6;background:var(--surface);color:var(--ink);border-radius:12px;
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--ink) 14%,transparent),-8px 0 24px rgba(0,0,0,.16);display:flex;flex-direction:column;min-height:0}
+.lib-head{display:flex;align-items:center;gap:8px;padding:10px 10px 0;flex-wrap:wrap}
+.tabs{display:flex;gap:4px;background:var(--paper);padding:4px;border-radius:12px;margin-right:auto;flex-wrap:wrap}
+.tab{min-height:40px;padding:0 12px;border:0;border-radius:9px;background:transparent;font-weight:700;color:var(--muted)}
+.tab[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.16)}
+.lib-hint{margin:8px 12px 0;font-size:14px;color:var(--muted)}
+.lib-body{flex:1;min-height:0;overflow:auto;padding:2px 12px 12px;--t:46px}
+.lib-body h3{margin:14px 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.lib-grid{display:flex;flex-wrap:wrap;gap:12px 8px}
+.libitem{position:relative;display:inline-flex}
+.libitem .card{cursor:pointer}
+.libitem.is-hidden .card{opacity:.35;border-style:dashed}
+.libitem .eye{position:absolute;bottom:-7px;right:-6px;font-size:10px;font-weight:700;background:var(--ink);color:var(--surface);border-radius:6px;padding:2px 5px;pointer-events:none}
+.libitem .del{position:absolute;top:-10px;right:-10px;width:28px;height:28px;border-radius:50%;border:2px solid var(--surface);background:var(--danger);color:#fff;font-weight:700;line-height:1}
+.lib-empty{color:var(--muted);font-size:14px;margin:4px 0}
+.lib-add{display:flex;gap:8px;padding:10px 12px;border-top:1px solid var(--edge)}
+input.field{flex:1;min-width:0;min-height:48px;border-radius:10px;border:1.5px solid var(--edge);padding:0 12px;font:400 20px var(--f-ui);background:var(--surface);color:var(--ink)}
+
+.modal-wrap{position:fixed;inset:0;z-index:60;background:rgba(10,16,24,.45);display:flex;align-items:flex-end;justify-content:center}
+.modal-wrap.center{align-items:center;padding:16px}
+.sheet{background:var(--surface);color:var(--ink);width:min(940px,100%);max-height:94%;overflow:auto;border-radius:18px 18px 0 0;
+  padding-block:16px calc(16px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;gap:12px;outline:none}
+.dialog{background:var(--surface);color:var(--ink);width:min(560px,100%);max-height:90%;overflow:auto;border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:14px;outline:none;box-shadow:0 20px 50px rgba(0,0,0,.3)}
+.dialog h2,.sheet h2{margin:0;font-size:21px;text-wrap:balance}
+.dialog p.sub{margin:-6px 0 0;color:var(--muted);font-size:15px;line-height:1.4}
+.dlg-head{display:flex;align-items:center;gap:10px}
+.dlg-head h2{margin-right:auto}
+.students{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.stu{min-height:64px;border-radius:12px;border:1.5px solid var(--edge);background:var(--paper);color:var(--ink);font:700 19px var(--f-ui);padding:8px 12px;text-align:left;display:flex;align-items:center;gap:10px;position:relative;overflow-wrap:anywhere}
+.stu .av{flex:none;width:36px;height:36px;border-radius:9px;display:grid;place-items:center;font:700 18px var(--f-tile);color:var(--tile-ink)}
+.stu[aria-current="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.stu.removing{border-color:var(--danger);color:var(--danger)}
+.practice{min-height:52px;border-radius:12px;border:1.5px dashed var(--edge);background:transparent;color:var(--ink);font-weight:700}
+.practice[aria-current="true"]{border-style:solid;border-color:var(--accent)}
+.addrow{display:flex;gap:8px}
+.note{font-size:13px;color:var(--muted);margin:0;line-height:1.4}
+.err{color:var(--danger);font-weight:700;margin:0;font-size:15px}
+.themes{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.theme{border-radius:12px;border:1.5px solid var(--edge);background:var(--paper);padding:8px;display:flex;flex-direction:column;gap:6px;color:var(--ink);font-weight:700;text-align:left}
+.theme[aria-pressed="true"]{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.theme .prev{height:64px;border-radius:8px;overflow:hidden;display:flex;flex-direction:column}
+.theme .prev .pb{height:14px}
+.theme .prev .pbody{flex:1;display:flex;align-items:center;gap:4px;padding:0 8px;position:relative}
+.theme .prev .pbody::after{content:"";position:absolute;left:6px;right:6px;bottom:8px;height:3px;border-radius:2px;background:var(--pl)}
+.theme .prev i{width:18px;height:18px;border-radius:3px;display:block;z-index:1}
+
+/* Editor sheet */
+.ed-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.ed-top h2{margin-right:auto}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{min-height:44px;padding:0 16px;border-radius:999px;border:1.5px solid var(--edge);background:var(--surface);color:var(--ink);font-weight:700}
+.chip[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.ed-preview{--t:clamp(60px,9vw,100px);min-height:calc(var(--t)*1.5);display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:center;background:var(--paper);border-radius:12px;padding:14px}
+.ed-preview .seg-active{outline:3px solid var(--accent);outline-offset:3px}
+.caret{display:inline-block;width:3px;height:.85em;background:var(--accent);margin-left:2px;vertical-align:middle;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.ed-hint{margin:0;text-align:center;color:var(--muted);font-size:15px}
+.pad{display:grid;grid-template-columns:repeat(9,1fr);gap:8px}
+.key{min-height:56px;border:0;border-radius:9px;background:var(--cons);font:400 30px/1 var(--f-tile);color:var(--tile-ink);box-shadow:inset 0 -3px 0 rgba(0,0,0,.08)}
+.key.v{background:var(--vowel)}
+.key:active{transform:translateY(1px);filter:brightness(.95)}
+.pad-actions{display:grid;grid-template-columns:1fr 1.6fr 1.3fr;gap:8px}
+.act{min-height:56px;border-radius:12px;border:1.5px solid var(--edge);background:var(--surface);color:var(--ink);font-weight:700;font-size:18px}
+.act.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.act.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 45%,transparent);min-height:48px;font-size:16px}
+.act.small{min-height:44px;font-size:16px;padding:0 16px}
+
+#toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);z-index:70;
+  background:var(--bar);color:var(--bar-ink);border-radius:12px;padding:8px 8px 8px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 24px rgba(0,0,0,.3);font-weight:700;max-width:calc(100% - 32px)}
+#toast button{min-height:40px;padding:0 14px;border-radius:8px;border:0;background:var(--bar-ink);color:var(--bar);font-weight:700}
+
+@media (orientation:portrait){ .bankzone{max-height:64%} }
+@media (max-width:700px){
+  .pad{gap:5px}.key{min-height:46px;font-size:24px}
+  .pad-actions{grid-template-columns:1fr 1fr}.pad-actions .primary{grid-column:1 / -1}
+  .brand{font-size:17px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="bar gutter">
+    <div class="brand"><span class="mark" aria-hidden="true"><i style="background:var(--vowel)"></i><i style="background:var(--cons)"></i><i style="background:var(--weld)"></i></span>WRS Tile Board</div>
+    <button class="ctl who" id="whoBtn">Practice board</button>
+    <span class="pill" id="pill" data-s="local"><i></i><span>Saved on this iPad</span></span>
+    <label class="stepctl"><select id="step" aria-label="Select a step"></select></label>
+    <button class="ctl" id="themeBtn">Theme</button>
+    <button class="ctl" id="libToggle" aria-pressed="false">Card Library</button>
+    <button class="ctl" id="drawToggle" aria-pressed="false">✎ Mark Up</button>
+  </header>
+
+  <main class="work gutter">
+    <div class="boardwrap" id="boardwrap">
+      <div class="boardbox" id="boardbox">
+        <section class="board" id="board" aria-label="Tile board">
+          <div class="rowband" data-row="0"></div><div class="rowband" data-row="1"></div>
+          <div class="gline"></div><div class="gline"></div><div class="gline"></div>
+          <div class="board-hint">Tap a row to choose where tapped tiles go</div>
+          <div id="pieces"></div>
+          <div id="rghosts"></div>
+          <canvas id="marks" width="1200" height="400"></canvas>
+          <button id="tileDel" aria-label="Remove tile" hidden>×</button>
+        </section>
+      </div>
+      <div class="marktools" id="marktools" hidden>
+        <button class="swatch" data-c="#1E2731" style="background:#1E2731" aria-label="Black pen" aria-pressed="true"></button>
+        <button class="swatch" data-c="#C62828" style="background:#C62828" aria-label="Red pen" aria-pressed="false"></button>
+        <button class="swatch" data-c="#1F5FBF" style="background:#1F5FBF" aria-label="Blue pen" aria-pressed="false"></button>
+        <button class="swatch" data-c="#2E7D32" style="background:#2E7D32" aria-label="Green pen" aria-pressed="false"></button>
+        <button class="swatch" data-c="#F2F2F2" style="background:#F2F2F2" aria-label="White pen" aria-pressed="false"></button>
+        <button class="mt-btn" id="markUndo">Undo mark</button>
+        <button class="mt-btn" id="markClear">Clear marks</button>
+        <button class="mt-btn primary" id="markDone">Done</button>
+      </div>
+    </div>
+
+    <section class="bankzone" id="bankzone">
+      <div class="banktabs" id="banktabs" role="tablist" hidden>
+        <button role="tab" data-bt="1" aria-selected="true">Sounds · Steps 1–6</button>
+        <button role="tab" data-bt="2" aria-selected="false">Sounds · Steps 7–12</button>
+      </div>
+      <div class="bank" id="bank">
+        <div class="side" id="side">
+          <div class="clears">
+            <button class="btn" id="clearCards" title="Removes syllable, base, prefix and suffix cards">Clear Cards</button>
+            <button class="btn" id="clearAll" title="Removes everything, including marks">Clear All</button>
+          </div>
+        </div>
+      </div>
+      <aside class="library" id="library" aria-label="Card library" hidden>
+        <div class="lib-head">
+          <div class="tabs" role="tablist" id="libTabs"></div>
+          <button class="act small" id="libChoose" aria-pressed="false">Choose cards</button>
+          <button class="act small" id="libClose">Hide</button>
+        </div>
+        <p class="lib-hint" id="libHint"></p>
+        <div class="lib-body" id="libBody"></div>
+        <form class="lib-add" id="libAdd" hidden>
+          <input class="field" id="libInput" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="Add your own card" maxlength="14">
+          <button class="act small primary" type="submit">Add</button>
+        </form>
+      </aside>
+    </section>
+  </main>
+</div>
+
+<div id="dragLayer"></div>
+
+<!-- Syllable / tile editor -->
+<div class="modal-wrap" id="sheetWrap" hidden>
+  <div class="sheet gutter" id="sheet" role="dialog" aria-modal="true" aria-labelledby="edTitle" tabindex="-1">
+    <div class="ed-top">
+      <h2 id="edTitle">Syllable card</h2>
+      <div class="chips" id="edChips"></div>
+      <button class="act small" id="edCancel">Cancel</button>
+    </div>
+    <div class="ed-preview" id="edPreview" aria-live="polite"></div>
+    <p class="ed-hint" id="edHint"></p>
+    <div class="pad" id="pad"></div>
+    <div class="pad-actions">
+      <button class="act" id="edBack">⌫ Delete</button>
+      <button class="act" id="edNext">Next syllable →</button>
+      <button class="act primary" id="edDone">Done</button>
+    </div>
+    <button class="act danger" id="edRemove" hidden>Remove this card from the board</button>
+  </div>
+</div>
+
+<!-- Student picker -->
+<div class="modal-wrap center" id="whoWrap" hidden>
+  <div class="dialog" id="whoDlg" role="dialog" aria-modal="true" aria-labelledby="whoTitle" tabindex="-1">
+    <div class="dlg-head"><h2 id="whoTitle">Whose board?</h2><button class="act small" id="whoClose">Close</button></div>
+    <p class="sub">Open the same student on two iPads and both show the same board, live. Each student's board, step and theme are saved.</p>
+    <p class="err" id="whoErr" hidden></p>
+    <div class="students" id="stuList"></div>
+    <button class="practice" id="practiceBtn">Practice board · saved on this iPad only</button>
+    <form class="addrow" id="stuAdd">
+      <input class="field" id="stuInput" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Add a student (first name or initials)" maxlength="24">
+      <button class="act small primary" type="submit">Add</button>
+    </form>
+    <div class="dlg-head"><p class="note">Names are visible to anyone with this page's link, so first names or initials work best.</p>
+      <button class="act small" id="stuEdit" aria-pressed="false">Remove students</button></div>
+  </div>
+</div>
+
+<!-- Theme picker -->
+<div class="modal-wrap center" id="themeWrap" hidden>
+  <div class="dialog" role="dialog" aria-modal="true" aria-labelledby="themeTitle" tabindex="-1" id="themeDlg">
+    <div class="dlg-head"><h2 id="themeTitle">Board theme</h2><button class="act small" id="themeClose">Done</button></div>
+    <p class="sub" id="themeSub">Tile colors stay the same in every theme.</p>
+    <div class="themes" id="themeList"></div>
+  </div>
+</div>
+
+<div id="toast" role="status" hidden><span></span><button id="toastUndo">Undo</button></div>
+
+<script>
+(() => {
+'use strict';
+/* =================== Settings =================== */
+const FB_URL = 'https://digitalspellingtileboard-default-rtdb.firebaseio.com';
+const ROOT = 'tileboard';
+const LW = 1200, LH = 400, ROWS = 2, TOP = 14, ROWH = (LH - 2 * TOP) / ROWS, GAP = 3, LEFT = 18;
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ls = {
+  get(k, d){ try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+};
+const DEV = ls.get('tb-device') || (() => { const d = 'd' + Math.random().toString(36).slice(2, 9); ls.set('tb-device', d); return d; })();
+const uid = p => (p || 'p') + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
+/* =================== Tiles (from the WRS Scope & Sequence) =================== */
+const VOWEL_SOUNDS = new Set(['a','e','i','o','u','y*','ə','ar','er','ir','or','ur','ai','ay','ee','ey','oa','oe','ue','oi','oy','au','aw','ou','ow','oo','ea','eu','ew','ui','igh','eigh','ie','ei']);
+const WELDED = new Set(['all','am','an','ang','ank','ing','ink','ong','onk','ung','unk','ild','ind','old','olt','ost','ive','stle']);
+// Step where each tile first appears. Anything not listed appears from Step 1.
+const STEP_INTRO = {
+  ang:2,ank:2,ing:2,ink:2,ong:2,onk:2,ung:2,unk:2,      // 2.1
+  ild:2,ind:2,old:2,ost:2,olt:2,                         // 2.3
+  'ə':3,                                                 // 3.1 schwa
+  ive:4,                                                 // 4.4
+  'y*':5,                                                // 5.1 y as a vowel
+  stle:6,                                                // 6.4
+  dge:7,tch:7,ph:7,                                      // 7.2, 7.3
+  ar:8,er:8,ir:8,or:8,ur:8,                              // 8.1
+  ai:9,ay:9,ee:9,ey:9,oa:9,oe:9,ue:9,oi:9,oy:9,au:9,aw:9,ou:9,ow:9,oo:9,ea:9,eu:9,ew:9,ui:9,
+  igh:11,eigh:11,ie:11,ei:11,                            // 11.3, 11.4
+  gh:12,gn:12,kn:12,mb:12,mn:12,rh:12,wr:12,que:12,      // 12.2, 12.4
+};
+const BANK_TABS = {
+  1: [
+    { label:'Letters and digraphs', rows:[['a','b','c','d','e','f'],['g','h','i','j','k','l'],['m','n','o','p','qu','r','s'],['t','u','v','w','x','y','z'],['wh','ch','sh','th','ck','y*','ə']] },
+    { label:'Welded sounds', rows:[['all','am','an'],['ang','ank'],['ing','ink'],['ong','onk'],['ung','unk']] },
+    { label:'Exceptions and blank tiles', rows:[['ild','ind'],['old','olt'],['ost','ive'],['stle'],['_vowel','_cons','_weld']] },
+  ],
+  2: [
+    { label:'Steps 7 and 8', rows:[['dge','tch','ph'],['ar','er','ir'],['or','ur']] },
+    { label:'Step 9 vowel teams', rows:[['ai','ay','ee','ey'],['oa','oe','ue'],['oi','oy','au','aw'],['ou','ow','oo'],['ea','eu','ew','ui']] },
+    { label:'Steps 11 and 12', rows:[['igh','eigh','ie','ei'],['gh','gn','kn','mb'],['mn','rh','wr','que'],['_vowel','_cons','_weld']] },
+  ],
+};
+const FRAMES = [{ type:'syll', label:'Syllable' }, { type:'base', label:'Base element' }, { type:'suffix', label:'Suffix' }, { type:'prefix', label:'Prefix' }];
+const TYPE_NAME = { syll:'Syllable card', base:'Base element card', prefix:'Prefix card', suffix:'Suffix card' };
+const CLS_NAME = { vowel:'Vowel', cons:'Consonant', weld:'Welded' };
+const LIB_TABS = [['prefix','Prefixes'],['suffix','Suffixes'],['base','Latin Bases'],['greek','Greek Forms']];
+const LIB = {
+  prefix: [
+    ['Prefixes', ['un','dis','mis','sub','in','im','il','ir','con','com','ex','non','en','em','fore','mid','co','de','e','pre','pro','re','a','inter','over','under','super','per','para','post','semi','anti','trans','out','hyper','hypo','geo','bi','tri','uni']],
+    ['Assimilated prefixes', ['ab','ac','ad','af','ag','al','an','ap','ar','as','at','col','cor','ef','of','op','sup','sur']],
+  ],
+  suffix: [
+    ['Vowel suffixes', ['es','ed','ing','er','est','en','ish','y','able','ible','ive','or','al','ic','ist','ism','ous','ent','ant','ence','ance','ency','ancy','ace','age','ate','ice','ile','ine','ite','ary','ery','ory','ity','ize','ably','ibly','ability','ibility','an','ure']],
+    ['Consonant suffixes', ['s','ful','less','ness','ment','ly','ty','ward']],
+    ['-ion syllables', ['tion','sion']],
+  ],
+  base: [['Latin bases', ['rupt','sist','dict','mit','miss','pel','pend','tend','tens','vert','vers','duct','spect','struct','ject','tract','flect','flict','sect','fect','fact','port','form','firm','clude','fuse','pose','duce','scribe','script','vise','vis','vid','cred','mand','cept','ceive','ceed','cede','cess','gress','tain','crease','sign','pos','pon','stat','mot','mov','aud','jud','jur','spir','fer']]],
+  greek: [['Greek combining forms', ['photo','tele','graph','phone','therm','meter','hydro','bio','logy','mania','phobia','geo','chron','psych','scope','micro']]],
+};
+const libType = t => t === 'greek' ? 'base' : t;
+const clsOf = c => c.startsWith('_') ? c.slice(1) : WELDED.has(c) ? 'weld' : VOWEL_SOUNDS.has(c) ? 'vowel' : 'cons';
+const shown = c => c === 'y*' ? 'y' : c;
+
+/* =================== Themes =================== */
+const THEMES = {
+  classic:{ name:'Classic', paper:'#ECEFF3', surface:'#FFFFFF', ink:'#1E2731', muted:'#5A6573', edge:'#C9D1DB', bar:'#1F3550', barInk:'#F3F6FA', accent:'#2C6CB0', accentInk:'#FFFFFF', line:'#BDCCE3' },
+  forest: { name:'Forest',  paper:'#E4EEE6', surface:'#FBFDF9', ink:'#16261B', muted:'#4C6253', edge:'#BFD3C3', bar:'#044E27', barInk:'#F1F8F2', accent:'#046A38', accentInk:'#FFFFFF', line:'#B4D38C' },
+  ocean:  { name:'Ocean',   paper:'#E1F0F4', surface:'#FFFFFF', ink:'#12303A', muted:'#4D6872', edge:'#B8D6DF', bar:'#0D5466', barInk:'#EEF9FC', accent:'#0E7C93', accentInk:'#FFFFFF', line:'#9ED0DC' },
+  sunset: { name:'Sunset',  paper:'#FAEBE2', surface:'#FFFBF7', ink:'#3A1E22', muted:'#7A5A5A', edge:'#EBCDBE', bar:'#7A2E3B', barInk:'#FFF4EF', accent:'#B2453D', accentInk:'#FFFFFF', line:'#F0BFA4' },
+  chalk:  { name:'Chalkboard', paper:'#DCE3DD', surface:'#FFFFFF', ink:'#1C2A21', muted:'#4C5E52', edge:'#AFC0B3', bar:'#1E3327', barInk:'#EEF4EF', accent:'#3F7D5A', accentInk:'#FFFFFF', line:'#7C9C88', board:'#2F4A3B', boardMuted:'#C4D3C8' },
+  night:  { name:'Night',   paper:'#0F1724', surface:'#1B2638', ink:'#E8EEF7', muted:'#9DAABB', edge:'#34445E', bar:'#0A101A', barInk:'#E8EEF7', accent:'#5B9BE6', accentInk:'#0A101A', line:'#3D5276', dark:true },
+  space:  { name:'Space',   paper:'#15112B', surface:'#231C44', ink:'#EEEBFF', muted:'#ABA3D4', edge:'#40377A', bar:'#0B0819', barInk:'#EEEBFF', accent:'#9A8CFF', accentInk:'#120E26', line:'#4D4290', dark:true },
+};
+let currentTheme = null;
+function applyTheme(key){
+  const th = THEMES[key] || THEMES.classic;
+  if (currentTheme === th) return;
+  currentTheme = th;
+  const r = document.documentElement.style;
+  const map = { paper:'--paper', surface:'--surface', ink:'--ink', muted:'--muted', edge:'--edge', bar:'--bar', barInk:'--bar-ink', accent:'--accent', accentInk:'--accent-ink', line:'--line' };
+  for (const k in map) r.setProperty(map[k], th[k]);
+  r.setProperty('--board', th.board || th.surface);
+  r.setProperty('--board-muted', th.boardMuted || th.muted);
+  document.documentElement.style.colorScheme = th.dark ? 'dark' : 'light';
+  renderThemeList();
+}
+
+/* =================== Board model =================== */
+const emptyBoard = () => ({ pieces:{}, strokes:{}, live:{}, presence:{}, step:'1', theme:'classic' });
+let board = emptyBoard();
+let student = null;          // { id, name } or null for practice
+let activeRow = 0;
+let bankTab = ls.get('tb-banktab', 1);
+const getP = id => board.pieces[id];
+const allP = () => Object.values(board.pieces);
+
+/* =================== Storage: Firebase REST or this iPad =================== */
+const dbUrl = path => `${FB_URL}/${ROOT}/${path}.json`;
+let status = 'local';
+function setStatus(s, extra){
+  status = s;
+  const pill = $('#pill'), txt = pill.querySelector('span');
+  pill.dataset.s = s;
+  if (s === 'local') txt.textContent = 'Saved on this iPad';
+  else if (s === 'connecting') txt.textContent = 'Connecting…';
+  else if (s === 'live'){ const n = presenceCount(); txt.textContent = n > 1 ? `Live · ${n} devices` : 'Live · saved'; }
+  else if (s === 'locked') txt.textContent = 'Database locked: check rules';
+  else txt.textContent = extra || 'Offline · changes not saved';
+}
+function remote(path, value){
+  if (!student) return;
+  const opts = value == null ? { method:'DELETE' } : { method:'PUT', body:JSON.stringify(value) };
+  fetch(dbUrl(`boards/${student.id}/${path}`), opts)
+    .then(r => { if (r.status === 401 || r.status === 403) setStatus('locked'); else if (!r.ok) setStatus('offline'); })
+    .catch(() => setStatus('offline'));
+}
+let localTimer;
+function persist(path, value){
+  if (student){ remote(path, value); }
+  clearTimeout(localTimer);
+  localTimer = setTimeout(saveLocalCopy, 300);
+}
+function saveLocalCopy(){
+  const copy = { pieces:board.pieces, strokes:board.strokes, step:board.step, theme:board.theme };
+  if (student) ls.set('tb-cache-' + student.id, copy); else ls.set('tb-practice', copy);
+}
+
+/* Live stream */
+let es = null, beat = null;
+function disconnect(){
+  if (es){ es.close(); es = null; }
+  clearInterval(beat); beat = null;
+  if (student) fetch(dbUrl(`boards/${student.id}/presence/${DEV}`), { method:'DELETE', keepalive:true }).catch(() => {});
+}
+function connect(){
+  if (!student) { setStatus('local'); return; }
+  setStatus('connecting');
+  let gotFirst = false;
+  es = new EventSource(dbUrl(`boards/${student.id}`));
+  es.addEventListener('put', e => {
+    const { path, data } = JSON.parse(e.data);
+    if (!gotFirst && path === '/'){
+      gotFirst = true;
+      if (data == null || !data.step){
+        // brand-new student: start from the current step and theme, keep any cached board
+        remote('step', board.step); remote('theme', board.theme);
+        if (data == null && Object.keys(board.pieces).length){ remote('pieces', board.pieces); remote('strokes', board.strokes); }
+        if (data == null) { reconcile(); setStatus('live'); return; }
+      }
+    }
+    applyRemote(path, data, false);
+    if (status !== 'locked') setStatus('live');
+  });
+  es.addEventListener('patch', e => { const { path, data } = JSON.parse(e.data); applyRemote(path, data, true); });
+  es.addEventListener('cancel', () => setStatus('locked'));
+  es.addEventListener('auth_revoked', () => setStatus('locked'));
+  es.onerror = () => {
+    if (!es) return;
+    if (es.readyState === 2){ setStatus('offline', 'Can’t reach the database'); setTimeout(() => { if (student && (!es || es.readyState === 2)) { es = null; connect(); } }, 8000); }
+    else setStatus('connecting');
+  };
+  const ping = () => remote(`presence/${DEV}`, Date.now());
+  ping(); beat = setInterval(ping, 15000);
+}
+function setIn(root, segs, data){
+  if (!segs.length) return data;
+  let o = root;
+  for (let i = 0; i < segs.length - 1; i++){ if (o[segs[i]] == null || typeof o[segs[i]] !== 'object') o[segs[i]] = {}; o = o[segs[i]]; }
+  const k = segs[segs.length - 1];
+  if (data == null) delete o[k]; else o[k] = data;
+  return root;
+}
+function applyRemote(path, data, isPatch){
+  const segs = path.split('/').filter(Boolean);
+  if (isPatch){
+    for (const [k, v] of Object.entries(data || {})) board = setIn(board, segs.concat(k.split('/').filter(Boolean)), v) || emptyBoard();
+  } else {
+    if (!segs.length) board = data || emptyBoard();
+    else board = setIn(board, segs, data);
+  }
+  normalize(); reconcile();
+}
+function normalize(){
+  const d = emptyBoard();
+  for (const k of ['pieces','strokes','live','presence']) if (!board[k] || typeof board[k] !== 'object') board[k] = {};
+  if (!board.step) board.step = d.step;
+  if (!board.theme) board.theme = d.theme;
+}
+function presenceCount(){
+  const now = Date.now();
+  return Object.values(board.presence || {}).filter(t => now - t < 40000).length;
+}
+
+/* =================== Visuals =================== */
+const DASH = '<span class="dash" aria-hidden="true"></span>';
+function innerOf(m){
+  const t = esc(m.text || '');
+  if (m.kind === 'tile') return `<span class="txt">${m.blank && !m.text ? '+' : t}</span>`;
+  if (m.type === 'prefix') return `<span class="txt">${t}</span>${DASH}`;
+  if (m.type === 'suffix') return `${DASH}<span class="txt">${t}</span>`;
+  if (m.type === 'base') return `${DASH}<span class="txt">${t}</span>${DASH}`;
+  return `<span class="txt">${t}</span>`;
+}
+function paint(el, m){
+  el.className = (m.kind === 'tile' ? 'tile ' + m.cls + (m.blank && !m.text ? ' blank' : '') : 'card ' + m.type + (m.text ? '' : ' empty')) + (el.dataset.id ? ' piece' : '');
+  el.innerHTML = innerOf(m);
+  if (m.kind === 'tile') el.dataset.len = Math.max(1, (m.text || '').length); else delete el.dataset.len;
+  el.setAttribute('aria-label', (m.kind === 'tile' ? 'tile ' : (TYPE_NAME[m.type] || '') + ' ') + (m.text || 'blank'));
+}
+function visual(m){ const el = document.createElement('div'); paint(el, m); return el; }
+
+/* =================== Board scaling =================== */
+const boardEl = $('#board'), boardbox = $('#boardbox'), boardwrap = $('#boardwrap'), layer = $('#pieces');
+const canvas = $('#marks'), ctx = canvas.getContext('2d');
+const bands = [...boardEl.querySelectorAll('.rowband')], glines = [...boardEl.querySelectorAll('.gline')];
+bands.forEach((b, i) => { b.style.top = (TOP + i * ROWH) + 'px'; b.style.height = ROWH + 'px'; });
+glines.forEach((g, i) => { g.style.top = (TOP + i * ROWH) + 'px'; });
+let S = 1;
+function fitBoard(){
+  const w = boardwrap.clientWidth, h = boardwrap.clientHeight;
+  S = Math.max(.2, Math.min(w / LW, h / LH));
+  boardbox.style.width = LW * S + 'px'; boardbox.style.height = LH * S + 'px';
+  boardEl.style.transform = `scale(${S})`;
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(LW * S * dpr); canvas.height = Math.round(LH * S * dpr);
+  ctx.setTransform(S * dpr, 0, 0, S * dpr, 0, 0);
+  redrawMarks();
+}
+const rowAt = y => Math.max(0, Math.min(ROWS - 1, Math.floor((y - TOP) / ROWH)));
+const clampX = (x, w) => Math.round(Math.max(4, Math.min(x, LW - w - 4)) * 10) / 10;
+const toLogical = (cx, cy) => { const r = boardEl.getBoundingClientRect(); return [(cx - r.left) / S, (cy - r.top) / S]; };
+const els = new Map();
+const wOf = p => (els.get(p.id) || {}).offsetWidth || 0;
+
+function mount(m){
+  const el = document.createElement('div');
+  el.dataset.id = m.id;
+  paint(el, m); el._j = JSON.stringify(m);
+  el.addEventListener('pointerdown', e => beginDrag(e, { from:'board', id:m.id }, el));
+  layer.appendChild(el); els.set(m.id, el);
+  return el;
+}
+function layoutPiece(m){
+  const el = els.get(m.id); if (!el) return;
+  el.style.left = m.x + 'px';
+  el.style.top = (TOP + m.row * ROWH + (ROWH - el.offsetHeight) / 2) + 'px';
+  el.style.zIndex = m.z || 1;
+}
+function rebuildAll(){ layer.innerHTML = ''; els.clear(); allP().forEach(m => { mount(m); layoutPiece(m); }); }
+function savePiece(m){ board.pieces[m.id] = m; const el = els.get(m.id); if (el) el._j = JSON.stringify(m); persist('pieces/' + m.id, m); }
+function setActiveRow(r){ activeRow = r; bands.forEach((b, i) => b.classList.toggle('active', i === r)); }
+const zTop = () => allP().reduce((a, p) => Math.max(a, p.z || 0), 0) + 1;
+
+let lastStep = null;
+function reconcile(){
+  for (const [id, m] of Object.entries(board.pieces)){
+    if (drag && drag.src.id === id) continue;
+    let el = els.get(id);
+    const j = JSON.stringify(m);
+    if (!el){ el = mount(m); layoutPiece(m); }
+    else if (el._j !== j){ el._j = j; paint(el, m); layoutPiece(m); }
+  }
+  for (const id of [...els.keys()]) if (!board.pieces[id]){ els.get(id).remove(); els.delete(id); if (delFor === id) hideTileDel(); }
+  redrawMarks();
+  if (board.step !== lastStep){ lastStep = board.step; $('#step').value = board.step; applyStep(); }
+  applyTheme(board.theme);
+  renderRemoteGhosts();
+  if (status === 'live') setStatus('live');
+}
+
+function rowEnd(r, except){
+  let end = null;
+  allP().forEach(p => { if (p.row === r && !(except && except.includes(p))) end = Math.max(end ?? 0, p.x + wOf(p)); });
+  return end;
+}
+function findSlot(row, w, except){
+  const order = [...Array(ROWS).keys()].filter(r => r >= row).concat([...Array(ROWS).keys()].filter(r => r < row));
+  for (const r of order){ const end = rowEnd(r, except); const x = end == null ? LEFT : end + GAP; if (x + w <= LW - 4) return { row:r, x }; }
+  return { row, x:Math.max(LEFT, LW - w - 4) };
+}
+function addPieces(models, row, x){
+  let z = zTop();
+  const made = models.map(mm => {
+    const m = { id:uid(), kind:mm.kind, text:mm.text || '', row, x:0, z:z++ };
+    if (mm.kind === 'tile'){ m.cls = mm.cls; if (mm.blank) m.blank = true; } else m.type = mm.type;
+    board.pieces[m.id] = m; mount(m); return m;
+  });
+  const widths = made.map(wOf);
+  const total = widths.reduce((a, b) => a + b + GAP, 0) - GAP;
+  if (x == null){
+    const slot = findSlot(row, total, made);
+    row = slot.row; x = slot.x; made.forEach(m => m.row = row); setActiveRow(row);
+  } else {
+    const others = allP().filter(p => p.row === row && !made.includes(p));
+    others.forEach(p => { const pw = wOf(p); if (p.x + pw / 2 <= x && p.x + pw > x) x = p.x + pw + GAP; });
+    if (others.some(p => p.x < x + total && p.x + wOf(p) > x))
+      others.filter(p => p.x + wOf(p) / 2 > x).forEach(p => { p.x = clampX(p.x + total + GAP, wOf(p)); layoutPiece(p); savePiece(p); });
+  }
+  let cx = x;
+  made.forEach((m, i) => { m.x = clampX(cx, widths[i]); cx += widths[i] + GAP; layoutPiece(m); savePiece(m); });
+  return made;
+}
+function snapshot(){ return JSON.stringify({ pieces:board.pieces, strokes:board.strokes }); }
+function restore(s){
+  const o = JSON.parse(s);
+  board.pieces = o.pieces || {}; board.strokes = o.strokes || {};
+  persist('pieces', Object.keys(board.pieces).length ? board.pieces : null);
+  persist('strokes', Object.keys(board.strokes).length ? board.strokes : null);
+  rebuildAll(); redrawMarks();
+}
+function removePiece(id){
+  const snap = snapshot();
+  delete board.pieces[id];
+  const el = els.get(id); if (el) el.remove(); els.delete(id);
+  hideTileDel(); persist('pieces/' + id, null); toast('Removed', snap);
+}
+
+/* =================== Bank =================== */
+const bank = $('#bank'), side = $('#side'), bankzone = $('#bankzone'), dragLayer = $('#dragLayer');
+function specFromCode(code){
+  const cls = clsOf(code);
+  if (code.startsWith('_')) return { kind:'tile', cls, text:'', blank:true, needsText:true };
+  return { kind:'tile', cls, text:shown(code) };
+}
+function bindSpec(el, spec){
+  el.addEventListener('pointerdown', e => beginDrag(e, { from:'spec', spec }, el));
+  el.addEventListener('click', e => { if (e.detail === 0) tapSpec(spec, el); });
+}
+for (const tab of [1, 2]){
+  BANK_TABS[tab].forEach(g => {
+    const grp = document.createElement('div'); grp.className = 'group'; grp.dataset.tab = tab; grp.setAttribute('aria-label', g.label);
+    g.rows.forEach(r => {
+      const row = document.createElement('div'); row.className = 'trow';
+      r.forEach(code => {
+        const spec = specFromCode(code);
+        const b = document.createElement('button'); b.type = 'button'; b.dataset.code = code;
+        paint(b, spec);
+        if (spec.blank) b.setAttribute('aria-label', 'blank ' + CLS_NAME[spec.cls].toLowerCase() + ' tile');
+        bindSpec(b, spec); row.appendChild(b);
+      });
+      grp.appendChild(row);
+    });
+    bank.insertBefore(grp, side);
+  });
+}
+FRAMES.forEach(f => {
+  const b = document.createElement('button'); b.type = 'button';
+  b.className = 'frame' + (f.type === 'prefix' || f.type === 'suffix' ? ' fix' : '');
+  const dl = f.type === 'suffix' || f.type === 'base' ? DASH : '', dr = f.type === 'prefix' || f.type === 'base' ? DASH : '';
+  b.innerHTML = `${dl}<span class="lbl"><b>${f.label}</b><small>Tap or drag up</small></span>${dr}`;
+  b.setAttribute('aria-label', 'New ' + TYPE_NAME[f.type].toLowerCase());
+  bindSpec(b, { kind:'card', type:f.type, text:'', needsText:true });
+  side.appendChild(b);
+});
+const stepSel = $('#step');
+for (let i = 1; i <= 12; i++) stepSel.insertAdjacentHTML('beforeend', `<option value="${i}">Step ${i}</option>`);
+stepSel.insertAdjacentHTML('beforeend', '<option value="all">All tiles</option>');
+stepSel.addEventListener('change', () => { board.step = stepSel.value; lastStep = board.step; persist('step', board.step); applyStep(); });
+document.querySelectorAll('#banktabs button').forEach(b => b.addEventListener('click', () => { bankTab = +b.dataset.bt; ls.set('tb-banktab', bankTab); applyStep(); }));
+
+function applyStep(){
+  const s = board.step, n = s === 'all' ? 99 : +s;
+  const tabsOn = n >= 7;
+  $('#banktabs').hidden = !tabsOn;
+  const tab = tabsOn ? bankTab : 1;
+  document.querySelectorAll('#banktabs button').forEach(b => b.setAttribute('aria-selected', +b.dataset.bt === tab));
+  bank.querySelectorAll('.group').forEach(g => { g.hidden = +g.dataset.tab !== tab; });
+  bank.querySelectorAll('button[data-code]').forEach(b => { b.hidden = (STEP_INTRO[b.dataset.code] || 1) > n; });
+  bank.querySelectorAll('.trow').forEach(r => { r.hidden = [...r.children].every(c => c.hidden); });
+  bank.querySelectorAll('.group').forEach(g => { if (!g.hidden && [...g.children].every(r => r.hidden)) g.hidden = true; });
+  fitBank();
+}
+function fitBank(){
+  let t = 74;
+  bank.style.setProperty('--bt', t + 'px');
+  while (t > 32 && bank.scrollHeight > bank.clientHeight + 1){ t -= 2; bank.style.setProperty('--bt', t + 'px'); }
+}
+
+/* =================== Drag and tap =================== */
+let drag = null, liveTimer = 0;
+function beginDrag(e, src, originEl){
+  if (drag || (e.button && e.button > 0)) return;
+  if (src.from === 'board' && boardEl.classList.contains('drawing')) return;
+  if (src.from === 'lib' && libChoose) return;
+  e.preventDefault();
+  if (src.from !== 'board') hideTileDel();
+  drag = { src, originEl, pid:e.pointerId, sx:e.clientX, sy:e.clientY, moved:false, ghost:null, gdx:0, gdy:0, model:null };
+}
+function startGhost(){
+  const d = drag, r = d.originEl.getBoundingClientRect();
+  hideTileDel();
+  if (d.src.from === 'board'){ d.model = getP(d.src.id); d.originEl.classList.add('lifting'); bankzone.classList.add('removing'); }
+  else d.model = d.src.spec;
+  const g = visual(d.model); g.classList.add('ghost');
+  g.style.setProperty('--t', '72px');
+  g.style.transform = `scale(${S * 1.06})`;
+  dragLayer.appendChild(g); d.ghost = g;
+  const gw = g.offsetWidth * S * 1.06, gh = g.offsetHeight * S * 1.06;
+  const same = d.src.from === 'board';
+  d.gdx = same ? d.sx - r.left : gw / 2;
+  d.gdy = same ? d.sy - r.top : gh / 2;
+}
+function ghostInfo(){
+  const g = drag.ghost, left = parseFloat(g.style.left), top = parseFloat(g.style.top);
+  const w = g.offsetWidth, h = g.offsetHeight; // logical size (transform excluded)
+  const [lx, ly] = toLogical(left, top);
+  const cy = ly + h / 2, cx = lx + w / 2;
+  const over = cx >= 0 && cx <= LW && cy >= 0 && cy <= LH;
+  return { lx, ly, w, h, cx, cy, over };
+}
+function liteModel(m){ const o = { kind:m.kind, text:m.text || '' }; if (m.kind === 'tile'){ o.cls = m.cls; if (m.blank) o.blank = true; } else o.type = m.type; return o; }
+window.addEventListener('pointermove', e => {
+  if (!drag || e.pointerId !== drag.pid) return;
+  if (!drag.moved){ if (Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 8) return; drag.moved = true; startGhost(); }
+  e.preventDefault();
+  const g = drag.ghost;
+  g.style.left = (e.clientX - drag.gdx) + 'px'; g.style.top = (e.clientY - drag.gdy) + 'px';
+  const gi = ghostInfo();
+  g.classList.toggle('outside', !gi.over && drag.src.from === 'board');
+  const hr = gi.over ? rowAt(gi.cy) : -1;
+  bands.forEach((b, i) => b.classList.toggle('hover', i === hr));
+  const now = Date.now();
+  if (student && now - liveTimer > 110){
+    liveTimer = now;
+    remote(`live/${DEV}`, gi.over ? { m:liteModel(drag.model), x:Math.round(gi.lx), y:Math.round(gi.ly), t:now } : null);
+  }
+}, { passive:false });
+window.addEventListener('pointerup', e => { if (drag && e.pointerId === drag.pid) endDrag(false); });
+window.addEventListener('pointercancel', e => { if (drag && e.pointerId === drag.pid) endDrag(true); });
+
+function endDrag(cancelled){
+  const d = drag;
+  bankzone.classList.remove('removing');
+  bands.forEach(b => b.classList.remove('hover'));
+  if (!d.moved){ drag = null; if (!cancelled) onTap(d); return; }
+  const gi = ghostInfo();
+  d.ghost.remove();
+  drag = null;
+  if (student) remote(`live/${DEV}`, null);
+  if (d.src.from === 'board') d.originEl.classList.remove('lifting');
+  if (cancelled) return;
+  if (d.src.from === 'board'){
+    const m = getP(d.src.id); if (!m) { reconcile(); return; }
+    if (!gi.over){ removePiece(m.id); return; }
+    m.row = rowAt(gi.cy); m.x = clampX(gi.lx, wOf(m)); m.z = zTop();
+    layoutPiece(m); savePiece(m); setActiveRow(m.row);
+    reconcile();
+    return;
+  }
+  if (!gi.over) return;
+  const row = rowAt(gi.cy), x = clampX(gi.lx, gi.w), spec = d.src.spec;
+  if (spec.needsText) openEditor({ mode:'new', kind:spec.kind, type:spec.type, cls:spec.cls, at:{ row, x } });
+  else { addPieces([spec], row, x); setActiveRow(row); }
+}
+function onTap(d){
+  if (d.src.from === 'board'){
+    const m = getP(d.src.id); if (!m) return;
+    if (m.kind === 'card' || m.blank) openEditor({ mode:'edit', id:m.id, kind:m.kind, type:m.type, cls:m.cls, text:m.text });
+    else showTileDel(m);
+    return;
+  }
+  tapSpec(d.src.spec, d.originEl);
+}
+function tapSpec(spec, el){
+  if (spec.needsText){ openEditor({ mode:'new', kind:spec.kind, type:spec.type, cls:spec.cls, at:null }); return; }
+  addPieces([spec], activeRow, null);
+  if (el){ el.classList.remove('pulse'); void el.offsetWidth; el.classList.add('pulse'); }
+}
+boardEl.addEventListener('pointerdown', e => {
+  if (boardEl.classList.contains('drawing')) return;
+  if (e.target.closest('.piece, #tileDel')) return;
+  hideTileDel();
+  setActiveRow(rowAt(toLogical(e.clientX, e.clientY)[1]));
+});
+
+/* Remote drag ghosts */
+const rgLayer = $('#rghosts'); const rgEls = new Map();
+function renderRemoteGhosts(){
+  const now = Date.now(), seen = new Set();
+  for (const [dev, g] of Object.entries(board.live || {})){
+    if (dev === DEV || !g || !g.m || now - (g.t || 0) > 8000) continue;
+    seen.add(dev);
+    let el = rgEls.get(dev);
+    const j = JSON.stringify(g.m);
+    if (!el){ el = visual(g.m); rgLayer.appendChild(el); rgEls.set(dev, el); el._j = j; }
+    else if (el._j !== j){ paint(el, g.m); el._j = j; }
+    el.classList.add('rghost');
+    el.style.left = g.x + 'px'; el.style.top = g.y + 'px';
+  }
+  for (const [dev, el] of rgEls) if (!seen.has(dev)){ el.remove(); rgEls.delete(dev); }
+}
+
+/* Quick remove for letter tiles */
+const tileDel = $('#tileDel'); let delFor = null, delTimer;
+function showTileDel(m){
+  const el = els.get(m.id); if (!el) return;
+  delFor = m.id;
+  tileDel.style.left = Math.min(LW - 58, m.x + el.offsetWidth - 30) + 'px';
+  tileDel.style.top = Math.max(2, el.offsetTop - 26) + 'px';
+  tileDel.hidden = false;
+  clearTimeout(delTimer); delTimer = setTimeout(hideTileDel, 3000);
+}
+function hideTileDel(){ tileDel.hidden = true; delFor = null; }
+tileDel.addEventListener('click', () => { if (delFor) removePiece(delFor); });
+
+/* Clear */
+$('#clearCards').addEventListener('click', () => {
+  const cards = allP().filter(p => p.kind === 'card');
+  if (!cards.length){ toast('No cards on the board'); return; }
+  const snap = snapshot();
+  cards.forEach(p => { delete board.pieces[p.id]; persist('pieces/' + p.id, null); });
+  rebuildAll(); toast('Cards cleared', snap);
+});
+$('#clearAll').addEventListener('click', () => {
+  if (!allP().length && !Object.keys(board.strokes).length){ toast('The board is already clear'); return; }
+  const snap = snapshot();
+  board.pieces = {}; board.strokes = {};
+  persist('pieces', null); persist('strokes', null);
+  rebuildAll(); redrawMarks(); setActiveRow(0); toast('Board cleared', snap);
+});
+
+/* Toast */
+const toastEl = $('#toast'); let toastTimer, undoSnap = null;
+function toast(msg, snap){
+  toastEl.querySelector('span').textContent = msg;
+  undoSnap = snap || null; $('#toastUndo').hidden = !snap; toastEl.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => { toastEl.hidden = true; }, 5000);
+}
+$('#toastUndo').addEventListener('click', () => { if (undoSnap){ restore(undoSnap); undoSnap = null; } toastEl.hidden = true; });
+
+/* =================== Editor sheet =================== */
+const sheetWrap = $('#sheetWrap'), sheet = $('#sheet'), edPreview = $('#edPreview'), edChips = $('#edChips');
+let ed = null;
+'abcdefghijklmnopqrstuvwxyzə'.split('').forEach(ch => {
+  const k = document.createElement('button'); k.type = 'button';
+  k.className = 'key' + ('aeiouə'.includes(ch) ? ' v' : ''); k.textContent = ch;
+  k.addEventListener('click', () => edKey(ch));
+  $('#pad').appendChild(k);
+});
+function openEditor(o){
+  hideTileDel();
+  ed = { mode:o.mode, kind:o.kind, type:o.type || 'syll', cls:o.cls || 'cons', id:o.id || null, at:o.at || null, segs:[o.text || ''] };
+  $('#edRemove').hidden = ed.mode !== 'edit';
+  $('#edRemove').textContent = ed.kind === 'tile' ? 'Remove this tile from the board' : 'Remove this card from the board';
+  $('#edNext').hidden = ed.kind === 'tile';
+  $('#edHint').textContent = ed.kind === 'tile' ? 'Type on the keyboard or tap letters to write on this tile.'
+    : 'Type on the keyboard or tap letters. Press space or Next syllable to start another card.';
+  renderEd(); sheetWrap.hidden = false; sheet.focus({ preventScroll:true });
+}
+function closeEditor(){ ed = null; sheetWrap.hidden = true; }
+function renderEd(){
+  edChips.innerHTML = '';
+  const opts = ed.kind === 'tile' ? Object.keys(CLS_NAME).map(k => [k, CLS_NAME[k]]) : [['syll','Syllable'],['base','Base'],['prefix','Prefix'],['suffix','Suffix']];
+  opts.forEach(([k, label]) => {
+    const c = document.createElement('button'); c.type = 'button'; c.className = 'chip'; c.textContent = label;
+    c.setAttribute('aria-pressed', ed.kind === 'tile' ? ed.cls === k : ed.type === k);
+    c.addEventListener('click', () => { if (ed.kind === 'tile') ed.cls = k; else ed.type = k; renderEd(); });
+    edChips.appendChild(c);
+  });
+  $('#edTitle').textContent = (ed.mode === 'edit' ? 'Edit ' : 'New ') + (ed.kind === 'tile' ? 'tile' : TYPE_NAME[ed.type].toLowerCase());
+  edPreview.innerHTML = '';
+  ed.segs.forEach((s, i) => {
+    const m = ed.kind === 'tile' ? { kind:'tile', cls:ed.cls, text:s } : { kind:'card', type:ed.type, text:s };
+    const el = visual(m);
+    if (i === ed.segs.length - 1){ el.classList.add('seg-active'); el.querySelector('.txt').insertAdjacentHTML('beforeend', '<span class="caret"></span>'); }
+    edPreview.appendChild(el);
+  });
+}
+function edKey(ch){ if (!ed) return; const i = ed.segs.length - 1; if (ed.segs[i].length >= (ed.kind === 'tile' ? 5 : 14)) return; ed.segs[i] += ch; renderEd(); }
+function edBreak(){ if (!ed || ed.kind === 'tile') return; if (ed.segs[ed.segs.length - 1].trim()){ ed.segs.push(''); renderEd(); } }
+function edBack(){ if (!ed) return; const i = ed.segs.length - 1; if (ed.segs[i].length) ed.segs[i] = ed.segs[i].slice(0, -1); else if (i > 0) ed.segs.pop(); renderEd(); }
+function edDone(){
+  if (!ed) return;
+  const segs = ed.segs.map(s => s.trim().replace(/^-+|-+$/g, '')).filter(Boolean);
+  const mk = t => ed.kind === 'tile' ? { kind:'tile', cls:ed.cls, text:t, blank:true } : { kind:'card', type:ed.type, text:t };
+  if (ed.mode === 'new'){
+    if (segs.length){ const row = ed.at ? ed.at.row : activeRow; addPieces(segs.map(mk), row, ed.at ? ed.at.x : null); if (ed.at) setActiveRow(row); }
+  } else {
+    const m = getP(ed.id);
+    if (m){
+      if (!segs.length){ const id = m.id; closeEditor(); removePiece(id); return; }
+      const el = els.get(m.id), oldW = el.offsetWidth, oldRight = m.x + oldW;
+      m.text = segs[0];
+      if (ed.kind === 'tile') m.cls = ed.cls; else m.type = ed.type;
+      paint(el, m);
+      const newW = el.offsetWidth, delta = newW - oldW;
+      if (delta > 0){
+        const right = allP().filter(p => p !== m && p.row === m.row && p.x >= oldRight - 4);
+        if (right.some(p => p.x < m.x + newW + GAP)) right.forEach(p => { p.x = clampX(p.x + delta, wOf(p)); layoutPiece(p); savePiece(p); });
+      }
+      m.x = clampX(m.x, newW); layoutPiece(m); savePiece(m);
+      if (segs.length > 1) addPieces(segs.slice(1).map(mk), m.row, m.x + newW + GAP);
+    }
+  }
+  closeEditor();
+}
+$('#edBack').addEventListener('click', edBack);
+$('#edNext').addEventListener('click', edBreak);
+$('#edDone').addEventListener('click', edDone);
+$('#edCancel').addEventListener('click', closeEditor);
+$('#edRemove').addEventListener('click', () => { const id = ed && ed.id; closeEditor(); if (id) removePiece(id); });
+sheetWrap.addEventListener('pointerdown', e => { if (e.target === sheetWrap) closeEditor(); });
+document.addEventListener('keydown', e => {
+  if (!ed || e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key;
+  if (/^[a-zA-Z']$/.test(k)){ e.preventDefault(); edKey(k); }
+  else if (k === 'Backspace' || k === 'Delete'){ e.preventDefault(); edBack(); }
+  else if (k === ' ' || k === '-' || k === '/' || k === 'Tab'){ e.preventDefault(); edBreak(); }
+  else if (k === 'Enter'){ e.preventDefault(); edDone(); }
+  else if (k === 'Escape'){ e.preventDefault(); closeEditor(); }
+});
+
+/* =================== Card library =================== */
+const library = $('#library'), libBody = $('#libBody');
+let libChoose = false, libTab = ls.get('tb-libtab', 'prefix');
+let libHidden = new Set(ls.get('tb-libhidden', []));
+let libCustom = ls.get('tb-libcustom', { prefix:[], suffix:[], base:[], greek:[] });
+LIB_TABS.forEach(([k, label]) => $('#libTabs').insertAdjacentHTML('beforeend', `<button class="tab" role="tab" data-tab="${k}">${label}</button>`));
+document.querySelectorAll('#libTabs .tab').forEach(t => t.addEventListener('click', () => { libTab = t.dataset.tab; ls.set('tb-libtab', libTab); renderLib(); }));
+function setLib(open){ library.hidden = !open; $('#libToggle').setAttribute('aria-pressed', open); ls.set('tb-libopen', open); if (open) renderLib(); }
+$('#libToggle').addEventListener('click', () => setLib(library.hidden));
+$('#libClose').addEventListener('click', () => setLib(false));
+$('#libChoose').addEventListener('click', () => { libChoose = !libChoose; renderLib(); });
+$('#libAdd').addEventListener('submit', e => {
+  e.preventDefault();
+  const v = $('#libInput').value.trim().replace(/^-+|-+$/g, '');
+  const all = LIB[libTab].flatMap(g => g[1]);
+  if (v && !all.includes(v) && !libCustom[libTab].includes(v)){ libCustom[libTab].push(v); ls.set('tb-libcustom', libCustom); }
+  $('#libInput').value = ''; renderLib();
+});
+function renderLib(){
+  const t = libTab;
+  document.querySelectorAll('#libTabs .tab').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === t));
+  const hiddenCount = [...libHidden].filter(k => k.startsWith(t + ':')).length;
+  $('#libChoose').setAttribute('aria-pressed', libChoose);
+  $('#libChoose').textContent = libChoose ? 'Finished choosing' : 'Choose cards' + (hiddenCount ? ` (${hiddenCount} hidden)` : '');
+  $('#libHint').textContent = libChoose ? 'Tap a card to hide or show it. Hidden cards stay out of the library until you show them again.'
+    : 'Tap a card to add it to the board, or drag it into place.';
+  $('#libAdd').hidden = !libChoose;
+  const groups = LIB[t].map(([label, list]) => [label, list.map(x => ({ text:x, custom:false }))]);
+  if (libCustom[t].length) groups.push(['Your cards', libCustom[t].map(x => ({ text:x, custom:true }))]);
+  libBody.innerHTML = '';
+  groups.forEach(([label, list]) => {
+    const h = document.createElement('h3'); h.textContent = label; libBody.appendChild(h);
+    const grid = document.createElement('div'); grid.className = 'lib-grid';
+    let count = 0;
+    list.forEach(item => {
+      const key = t + ':' + item.text, isHidden = libHidden.has(key);
+      if (isHidden && !libChoose) return;
+      count++;
+      const wrap = document.createElement('span'); wrap.className = 'libitem' + (isHidden ? ' is-hidden' : '');
+      const spec = { kind:'card', type:libType(t), text:item.text };
+      const b = document.createElement('button'); b.type = 'button'; paint(b, spec);
+      b.addEventListener('pointerdown', e => beginDrag(e, { from:'lib', spec }, b));
+      b.addEventListener('click', e => {
+        if (libChoose){ libHidden.has(key) ? libHidden.delete(key) : libHidden.add(key); ls.set('tb-libhidden', [...libHidden]); renderLib(); }
+        else if (e.detail === 0) tapSpec(spec, b);
+      });
+      wrap.appendChild(b);
+      if (libChoose && isHidden) wrap.insertAdjacentHTML('beforeend', '<span class="eye">hidden</span>');
+      if (libChoose && item.custom){
+        const del = document.createElement('button'); del.type = 'button'; del.className = 'del'; del.textContent = '×';
+        del.setAttribute('aria-label', 'Delete ' + item.text);
+        del.addEventListener('click', () => { libCustom[t] = libCustom[t].filter(x => x !== item.text); libHidden.delete(key); ls.set('tb-libcustom', libCustom); ls.set('tb-libhidden', [...libHidden]); renderLib(); });
+        wrap.appendChild(del);
+      }
+      grid.appendChild(wrap);
+    });
+    if (!count){ const p = document.createElement('p'); p.className = 'lib-empty'; p.textContent = 'All hidden. Tap Choose cards to show some.'; libBody.appendChild(p); }
+    else libBody.appendChild(grid);
+  });
+}
+
+/* =================== Mark up =================== */
+let pen = { c:'#1E2731', w:5 }, cur = null, curPid = null, sawPen = false;
+function setDraw(on){ boardEl.classList.toggle('drawing', on); $('#marktools').hidden = !on; $('#drawToggle').setAttribute('aria-pressed', on); hideTileDel(); }
+$('#drawToggle').addEventListener('click', () => setDraw(!boardEl.classList.contains('drawing')));
+$('#markDone').addEventListener('click', () => setDraw(false));
+$('#markUndo').addEventListener('click', () => {
+  const list = Object.entries(board.strokes).sort((a, b) => (a[1].t || 0) - (b[1].t || 0));
+  const mine = list.filter(([, s]) => s.d === DEV); const last = (mine.length ? mine : list).pop();
+  if (!last) return;
+  delete board.strokes[last[0]]; persist('strokes/' + last[0], null); redrawMarks();
+});
+$('#markClear').addEventListener('click', () => {
+  if (!Object.keys(board.strokes).length) return;
+  const snap = snapshot(); board.strokes = {}; persist('strokes', null); redrawMarks(); toast('Marks cleared', snap);
+});
+document.querySelectorAll('.swatch').forEach(s => s.addEventListener('click', () => {
+  pen.c = s.dataset.c; document.querySelectorAll('.swatch').forEach(x => x.setAttribute('aria-pressed', x === s));
+}));
+function drawStroke(s){
+  const p = s.p; if (!p || p.length < 2) return;
+  ctx.strokeStyle = s.c; ctx.fillStyle = s.c; ctx.lineWidth = s.w; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  if (p.length === 2){ ctx.beginPath(); ctx.arc(p[0], p[1], s.w / 2, 0, Math.PI * 2); ctx.fill(); return; }
+  ctx.beginPath(); ctx.moveTo(p[0], p[1]);
+  for (let i = 2; i < p.length; i += 2) ctx.lineTo(p[i], p[i + 1]);
+  ctx.stroke();
+}
+function redrawMarks(){
+  ctx.clearRect(0, 0, LW, LH);
+  Object.values(board.strokes || {}).sort((a, b) => (a.t || 0) - (b.t || 0)).forEach(drawStroke);
+  if (cur) drawStroke(cur);
+}
+canvas.addEventListener('pointerdown', e => {
+  if (!boardEl.classList.contains('drawing') || cur) return;
+  if (e.pointerType === 'pen') sawPen = true;
+  else if (e.pointerType === 'touch' && sawPen) return; // palm rejection once a Pencil has been used
+  e.preventDefault();
+  try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
+  const [x, y] = toLogical(e.clientX, e.clientY);
+  cur = { c:pen.c, w:pen.w, p:[Math.round(x), Math.round(y)], t:Date.now(), d:DEV }; curPid = e.pointerId;
+  drawStroke(cur);
+});
+canvas.addEventListener('pointermove', e => {
+  if (!cur || e.pointerId !== curPid) return;
+  const list = (e.getCoalescedEvents && e.getCoalescedEvents().length) ? e.getCoalescedEvents() : [e];
+  list.forEach(ev => {
+    const [x, y] = toLogical(ev.clientX, ev.clientY), n = cur.p.length;
+    const px = cur.p[n - 2], py = cur.p[n - 1], nx = Math.round(x), ny = Math.round(y);
+    if (nx === px && ny === py) return;
+    cur.p.push(nx, ny);
+    ctx.strokeStyle = cur.c; ctx.lineWidth = cur.w; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(nx, ny); ctx.stroke();
+  });
+});
+const endStroke = e => {
+  if (!cur || e.pointerId !== curPid) return;
+  const id = uid('s'); board.strokes[id] = cur; persist('strokes/' + id, cur);
+  cur = null; curPid = null;
+};
+canvas.addEventListener('pointerup', endStroke);
+canvas.addEventListener('pointercancel', endStroke);
+
+/* =================== Students =================== */
+const whoWrap = $('#whoWrap');
+let stuCache = ls.get('tb-students', {}), stuEdit = false, stuArm = null;
+const AV = ['var(--vowel)','var(--cons)','var(--weld)'];
+function openWho(){ whoWrap.hidden = false; $('#whoDlg').focus({ preventScroll:true }); renderStudents(); loadStudents(); }
+function closeWho(){ whoWrap.hidden = true; stuEdit = false; stuArm = null; $('#stuEdit').setAttribute('aria-pressed', false); }
+$('#whoBtn').addEventListener('click', openWho);
+$('#whoClose').addEventListener('click', closeWho);
+whoWrap.addEventListener('pointerdown', e => { if (e.target === whoWrap) closeWho(); });
+$('#stuEdit').addEventListener('click', () => { stuEdit = !stuEdit; stuArm = null; $('#stuEdit').setAttribute('aria-pressed', stuEdit); $('#stuEdit').textContent = stuEdit ? 'Done removing' : 'Remove students'; renderStudents(); });
+async function loadStudents(){
+  const err = $('#whoErr');
+  try {
+    const r = await fetch(dbUrl('students'));
+    if (r.status === 401 || r.status === 403) throw new Error('locked');
+    if (!r.ok) throw new Error('http');
+    stuCache = (await r.json()) || {}; ls.set('tb-students', stuCache);
+    err.hidden = true; renderStudents();
+  } catch (e) {
+    err.hidden = false;
+    err.textContent = e.message === 'locked' ? 'The database is locked. Update the Realtime Database rules (see the README).' : 'Can’t reach the database right now. The practice board still works.';
+  }
+}
+function renderStudents(){
+  const list = $('#stuList'); list.innerHTML = '';
+  Object.entries(stuCache).sort((a, b) => a[1].name.localeCompare(b[1].name)).forEach(([id, s], i) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'stu';
+    const armed = stuArm === id;
+    if (armed) b.classList.add('removing');
+    b.setAttribute('aria-current', !!(student && student.id === id));
+    b.innerHTML = `<span class="av" style="background:${AV[i % 3]}">${esc(s.name.trim().charAt(0).toLowerCase())}</span><span>${armed ? 'Tap again to remove' : esc(s.name)}</span>`;
+    b.addEventListener('click', () => {
+      if (stuEdit){
+        if (stuArm !== id){ stuArm = id; renderStudents(); return; }
+        removeStudent(id); return;
+      }
+      selectStudent({ id, name:s.name }); closeWho();
+    });
+    list.appendChild(b);
+  });
+  if (!list.children.length) list.innerHTML = '<p class="note" style="grid-column:1 / -1">No students yet. Add one below.</p>';
+  $('#practiceBtn').setAttribute('aria-current', !student);
+}
+$('#practiceBtn').addEventListener('click', () => { selectStudent(null); closeWho(); });
+$('#stuAdd').addEventListener('submit', async e => {
+  e.preventDefault();
+  const name = $('#stuInput').value.trim(); if (!name) return;
+  const id = (name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 16) || 'student') + '-' + Math.random().toString(36).slice(2, 6);
+  try {
+    const r = await fetch(dbUrl('students/' + id), { method:'PUT', body:JSON.stringify({ name, created:Date.now() }) });
+    if (!r.ok) throw new Error(r.status === 401 || r.status === 403 ? 'locked' : 'http');
+    stuCache[id] = { name }; ls.set('tb-students', stuCache);
+    $('#stuInput').value = '';
+    selectStudent({ id, name }); closeWho();
+  } catch (err) {
+    $('#whoErr').hidden = false;
+    $('#whoErr').textContent = err.message === 'locked' ? 'The database is locked, so the student wasn’t added. Update the rules (see the README).' : 'Couldn’t add the student. Check the internet connection.';
+  }
+});
+async function removeStudent(id){
+  const name = stuCache[id] && stuCache[id].name;
+  try {
+    await fetch(dbUrl('students/' + id), { method:'DELETE' });
+    await fetch(dbUrl('boards/' + id), { method:'DELETE' });
+    delete stuCache[id]; ls.set('tb-students', stuCache);
+    try { localStorage.removeItem('tb-cache-' + id); } catch (e) {}
+    if (student && student.id === id) selectStudent(null);
+    stuArm = null; renderStudents(); toast((name || 'Student') + ' removed');
+  } catch (e) { $('#whoErr').hidden = false; $('#whoErr').textContent = 'Couldn’t remove the student.'; }
+}
+function selectStudent(s){
+  disconnect();
+  student = s;
+  ls.set('tb-last', s ? s : null);
+  const url = new URL(location.href);
+  if (s) url.searchParams.set('student', s.id); else url.searchParams.delete('student');
+  history.replaceState(null, '', url);
+  $('#whoBtn').textContent = s ? s.name : 'Practice board';
+  board = Object.assign(emptyBoard(), s ? ls.get('tb-cache-' + s.id, {}) : ls.get('tb-practice', {}));
+  normalize(); lastStep = null; currentTheme = null;
+  rebuildAll(); hideTileDel(); setActiveRow(0); reconcile();
+  if (s) connect(); else setStatus('local');
+}
+window.addEventListener('pagehide', () => { if (student) fetch(dbUrl(`boards/${student.id}/presence/${DEV}`), { method:'DELETE', keepalive:true }).catch(() => {}); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && student && (!es || es.readyState === 2)){ disconnect(); connect(); }
+});
+
+/* =================== Themes =================== */
+const themeWrap = $('#themeWrap');
+function renderThemeList(){
+  const list = $('#themeList'); if (!list) return; list.innerHTML = '';
+  for (const [k, th] of Object.entries(THEMES)){
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'theme';
+    b.setAttribute('aria-pressed', (board.theme || 'classic') === k);
+    b.innerHTML = `<span class="prev" style="background:${th.board || th.surface};--pl:${th.line}"><span class="pb" style="background:${th.bar}"></span>
+      <span class="pbody"><i style="background:var(--cons)"></i><i style="background:var(--vowel)"></i><i style="background:var(--cons)"></i><i style="background:var(--weld)"></i></span></span>${esc(th.name)}`;
+    b.addEventListener('click', () => { board.theme = k; persist('theme', k); applyTheme(k); });
+    list.appendChild(b);
+  }
+  $('#themeSub').textContent = student ? `Saved for ${student.name}. Tile colors stay the same in every theme.` : 'Tile colors stay the same in every theme.';
+}
+$('#themeBtn').addEventListener('click', () => { renderThemeList(); themeWrap.hidden = false; $('#themeDlg').focus({ preventScroll:true }); });
+$('#themeClose').addEventListener('click', () => { themeWrap.hidden = true; });
+themeWrap.addEventListener('pointerdown', e => { if (e.target === themeWrap) themeWrap.hidden = true; });
+
+/* =================== Start =================== */
+new ResizeObserver(fitBoard).observe(boardwrap);
+new ResizeObserver(() => fitBank()).observe(bankzone);
+setInterval(() => { if (Object.keys(board.live || {}).length) renderRemoteGhosts(); if (status === 'live') setStatus('live'); }, 4000);
+
+const params = new URL(location.href).searchParams;
+const fromUrl = params.get('student');
+const last = ls.get('tb-last', null);
+let startWith = null;
+if (fromUrl) startWith = { id:fromUrl, name:(stuCache[fromUrl] && stuCache[fromUrl].name) || (last && last.id === fromUrl ? last.name : 'Student') };
+else if (last && last.id) startWith = last;
+
+fitBoard();
+const fontsReady = (document.fonts && document.fonts.ready) ? Promise.race([document.fonts.ready, new Promise(r => setTimeout(r, 1500))]) : Promise.resolve();
+fontsReady.then(() => {
+  const firstVisit = !startWith && ls.get('tb-practice', null) == null;
+  selectStudent(startWith);
+  if (ls.get('tb-libopen', false)) setLib(true);
+  if (firstVisit){
+    board.step = '6'; lastStep = null; persist('step', '6'); reconcile();
+    ['c','a','m','p'].forEach(ch => addPieces([{ kind:'tile', cls:clsOf(ch), text:ch }], 0, null));
+    addPieces([{ kind:'card', type:'suffix', text:'ing' }], 0, null);
+    addPieces(['fan','tas','tic'].map(t => ({ kind:'card', type:'syll', text:t })), 1, null);
+    setActiveRow(0);
+  }
+  if (startWith) fetch(dbUrl('students')).then(r => r.ok ? r.json() : null).then(d => {
+    if (!d) return; stuCache = d; ls.set('tb-students', d);
+    if (student && d[student.id]){ student.name = d[student.id].name; $('#whoBtn').textContent = student.name; ls.set('tb-last', student); }
+  }).catch(() => {});
+});
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "tileboard": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}
