@@ -199,6 +199,7 @@ input.field{flex:1;min-width:0;min-height:48px;border-radius:10px;border:1.5px s
   background:var(--bar);color:var(--bar-ink);border-radius:12px;padding:8px 8px 8px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 8px 24px rgba(0,0,0,.3);font-weight:700;max-width:calc(100% - 32px)}
 #toast button{min-height:40px;padding:0 14px;border-radius:8px;border:0;background:var(--bar-ink);color:var(--bar);font-weight:700}
 
+@media (max-width:1120px){ .ctl .long{display:none} .bar .brand{font-size:17px} }
 @media (orientation:portrait){ .bankzone{max-height:64%} }
 @media (max-width:700px){
   .pad{gap:5px}.key{min-height:46px;font-size:24px}
@@ -217,7 +218,7 @@ input.field{flex:1;min-width:0;min-height:48px;border-radius:10px;border:1.5px s
     <label class="stepctl"><select id="step" aria-label="Select a step"></select></label>
     <button class="ctl" id="themeBtn">Theme</button>
     <button class="ctl" id="drawToggle" aria-pressed="false">✎ Mark Up</button>
-    <button class="ctl" id="toolsBtn" aria-label="Teacher Tools">⚙ Teacher Tools</button>
+    <button class="ctl" id="toolsBtn" aria-label="Teacher Tools">⚙ <span class="long">Teacher </span>Tools</button>
   </header>
 
   <main class="work gutter">
@@ -292,7 +293,7 @@ input.field{flex:1;min-width:0;min-height:48px;border-radius:10px;border:1.5px s
     <div class="pad" id="pad"></div>
     <div class="pad-actions">
       <button class="act" id="edBack">⌫ Delete</button>
-      <button class="act" id="edNext">Next syllable →</button>
+      <button class="act" id="edNext">Next part →</button>
       <button class="act primary" id="edDone">Done</button>
     </div>
     <button class="act danger" id="edRemove" hidden>Remove this card from the board</button>
@@ -631,6 +632,7 @@ function reconcile(){
   if (stepKey !== lastStep){ lastStep = stepKey; $('#step').value = board.step; applyStep(); }
   applyTheme(board.theme);
   renderRemoteGhosts();
+  syncEditor();
   if (status === 'live') setStatus('live');
 }
 
@@ -905,9 +907,12 @@ function toast(msg, snap){
 }
 $('#toastUndo').addEventListener('click', () => { if (undoSnap){ restore(undoSnap); undoSnap = null; } toastEl.hidden = true; });
 
-/* =================== Editor sheet =================== */
+/* =================== Editor sheet (word builder) =================== */
+// Each part of the word keeps its own type (prefix, syllable, base, suffix).
+// For a student board the builder is shared: it opens on both screens and either one can type.
 const sheetWrap = $('#sheetWrap'), sheet = $('#sheet'), edPreview = $('#edPreview'), edChips = $('#edChips');
-let ed = null;
+let ed = null, edRemoteSid = null;
+const CARD_TYPES = [['prefix','Prefix'],['syll','Syllable'],['base','Base'],['suffix','Suffix']];
 'abcdefghijklmnopqrstuvwxyzə'.split('').forEach(ch => {
   const k = document.createElement('button'); k.type = 'button';
   k.className = 'key' + ('aeiouə'.includes(ch) ? ' v' : ''); k.textContent = ch;
@@ -916,40 +921,93 @@ let ed = null;
 });
 function openEditor(o){
   hideTileDel();
-  ed = { mode:o.mode, kind:o.kind, type:o.type || 'syll', cls:o.cls || 'cons', id:o.id || null, at:o.at || null, segs:[o.text || ''] };
+  const y = o.kind === 'tile' ? (o.cls || 'cons') : (o.type || 'syll');
+  ed = { sid:uid('e'), mode:o.mode, kind:o.kind, id:o.id || '', at:o.at || null, segs:[{ t:o.text || '', y }], a:0 };
+  showEditor(); pushEd();
+}
+function showEditor(){
   $('#edRemove').hidden = ed.mode !== 'edit';
   $('#edRemove').textContent = ed.kind === 'tile' ? 'Remove this tile from the board' : 'Remove this card from the board';
   $('#edNext').hidden = ed.kind === 'tile';
-  $('#edHint').textContent = ed.kind === 'tile' ? 'Type on the keyboard or tap letters to write on this tile.'
-    : 'Type on the keyboard or tap letters. Press space or Next syllable to start another card.';
-  renderEd(); sheetWrap.hidden = false; sheet.focus({ preventScroll:true });
+  renderEd();
+  if (sheetWrap.hidden){ sheetWrap.hidden = false; sheet.focus({ preventScroll:true }); }
 }
-function closeEditor(){ ed = null; sheetWrap.hidden = true; }
+function closeEditor(){ if (!ed) return; ed = null; sheetWrap.hidden = true; pushEd(); }
+function pushEd(){
+  if (!student) return;
+  const v = ed ? Object.assign({}, ed, { by:DEV, t:Date.now() }) : null;
+  board.editor = v;
+  remote('editor', v);
+}
+// Called from reconcile() whenever the shared board changes
+function syncEditor(){
+  if (!student) return;
+  const e = board.editor;
+  if (e && e.sid){
+    edRemoteSid = e.sid;
+    if (e.by === DEV) return;                         // our own write coming back
+    if (Date.now() - (e.t || 0) > 15 * 60 * 1000) return; // left open long ago
+    if (!Array.isArray(e.segs) || !e.segs.length) return;
+    ed = { sid:e.sid, mode:e.mode, kind:e.kind, id:e.id || '', at:e.at || null,
+           segs:e.segs.map(g => ({ t:g.t || '', y:g.y })), a:Math.min(e.a || 0, e.segs.length - 1) };
+    showEditor();
+  } else if (ed && edRemoteSid === ed.sid){
+    // the other screen finished or cancelled
+    ed = null; sheetWrap.hidden = true;
+  }
+}
 function renderEd(){
+  const seg = ed.segs[ed.a];
   edChips.innerHTML = '';
-  const opts = ed.kind === 'tile' ? Object.keys(CLS_NAME).map(k => [k, CLS_NAME[k]]) : [['syll','Syllable'],['base','Base'],['prefix','Prefix'],['suffix','Suffix']];
+  const opts = ed.kind === 'tile' ? Object.keys(CLS_NAME).map(k => [k, CLS_NAME[k]]) : CARD_TYPES;
   opts.forEach(([k, label]) => {
     const c = document.createElement('button'); c.type = 'button'; c.className = 'chip'; c.textContent = label;
-    c.setAttribute('aria-pressed', ed.kind === 'tile' ? ed.cls === k : ed.type === k);
-    c.addEventListener('click', () => { if (ed.kind === 'tile') ed.cls = k; else ed.type = k; renderEd(); });
+    c.setAttribute('aria-pressed', seg.y === k);
+    c.addEventListener('click', () => { seg.y = k; renderEd(); pushEd(); });
     edChips.appendChild(c);
   });
-  $('#edTitle').textContent = (ed.mode === 'edit' ? 'Edit ' : 'New ') + (ed.kind === 'tile' ? 'tile' : TYPE_NAME[ed.type].toLowerCase());
+  $('#edTitle').textContent = ed.kind === 'tile' ? (ed.mode === 'edit' ? 'Edit tile' : 'New tile')
+    : (ed.mode === 'edit' ? 'Edit card' : 'Build a word');
   edPreview.innerHTML = '';
-  ed.segs.forEach((s, i) => {
-    const m = ed.kind === 'tile' ? { kind:'tile', cls:ed.cls, text:s } : { kind:'card', type:ed.type, text:s };
+  ed.segs.forEach((g, i) => {
+    const m = ed.kind === 'tile' ? { kind:'tile', cls:g.y, text:g.t } : { kind:'card', type:g.y, text:g.t };
     const el = visual(m);
-    if (i === ed.segs.length - 1){ el.classList.add('seg-active'); el.querySelector('.txt').insertAdjacentHTML('beforeend', '<span class="caret"></span>'); }
+    el.style.cursor = 'pointer';
+    if (i === ed.a){ el.classList.add('seg-active'); el.querySelector('.txt').insertAdjacentHTML('beforeend', '<span class="caret"></span>'); }
+    el.addEventListener('click', () => { if (!ed) return; ed.a = i; renderEd(); pushEd(); });
     edPreview.appendChild(el);
   });
+  const both = student && status === 'live' ? ' Showing on both screens.' : '';
+  $('#edHint').textContent = ed.kind === 'tile' ? 'Type on the keyboard or tap letters to write on this tile.' + both
+    : 'Pick the type, then type the letters. Next part keeps what you built and adds another card. Tap any card to fix it.' + both;
 }
-function edKey(ch){ if (!ed) return; const i = ed.segs.length - 1; if (ed.segs[i].length >= (ed.kind === 'tile' ? 5 : 14)) return; ed.segs[i] += ch; renderEd(); }
-function edBreak(){ if (!ed || ed.kind === 'tile') return; if (ed.segs[ed.segs.length - 1].trim()){ ed.segs.push(''); renderEd(); } }
-function edBack(){ if (!ed) return; const i = ed.segs.length - 1; if (ed.segs[i].length) ed.segs[i] = ed.segs[i].slice(0, -1); else if (i > 0) ed.segs.pop(); renderEd(); }
+function edKey(ch){
+  if (!ed) return;
+  const g = ed.segs[ed.a];
+  if (g.t.length >= (ed.kind === 'tile' ? 5 : 14)) return;
+  g.t += ch; renderEd(); pushEd();
+}
+function edBreak(){
+  if (!ed || ed.kind === 'tile') return;
+  const g = ed.segs[ed.a];
+  if (!g.t.trim()) return;
+  // New part defaults to a syllable, or another suffix after a suffix. Earlier parts keep their type.
+  const y = g.y === 'suffix' ? 'suffix' : 'syll';
+  ed.segs.splice(ed.a + 1, 0, { t:'', y });
+  ed.a++; renderEd(); pushEd();
+}
+function edBack(){
+  if (!ed) return;
+  const g = ed.segs[ed.a];
+  if (g.t.length) g.t = g.t.slice(0, -1);
+  else if (ed.segs.length > 1){ ed.segs.splice(ed.a, 1); ed.a = Math.max(0, ed.a - 1); }
+  renderEd(); pushEd();
+}
+function edMove(d){ if (!ed) return; ed.a = Math.max(0, Math.min(ed.segs.length - 1, ed.a + d)); renderEd(); pushEd(); }
 function edDone(){
   if (!ed) return;
-  const segs = ed.segs.map(s => s.trim().replace(/^-+|-+$/g, '')).filter(Boolean);
-  const mk = t => ed.kind === 'tile' ? { kind:'tile', cls:ed.cls, text:t, blank:true } : { kind:'card', type:ed.type, text:t };
+  const segs = ed.segs.map(g => ({ t:g.t.trim().replace(/^-+|-+$/g, ''), y:g.y })).filter(g => g.t);
+  const mk = g => ed.kind === 'tile' ? { kind:'tile', cls:g.y, text:g.t, blank:true } : { kind:'card', type:g.y, text:g.t };
   if (ed.mode === 'new'){
     if (segs.length){ const row = ed.at ? ed.at.row : activeRow; addPieces(segs.map(mk), row, ed.at ? ed.at.x : null); if (ed.at) setActiveRow(row); }
   } else {
@@ -957,8 +1015,8 @@ function edDone(){
     if (m){
       if (!segs.length){ const id = m.id; closeEditor(); removePiece(id); return; }
       const el = els.get(m.id), oldW = el.offsetWidth, oldRight = m.x + oldW;
-      m.text = segs[0];
-      if (ed.kind === 'tile') m.cls = ed.cls; else m.type = ed.type;
+      m.text = segs[0].t;
+      if (ed.kind === 'tile') m.cls = segs[0].y; else m.type = segs[0].y;
       paint(el, m);
       const newW = el.offsetWidth, delta = newW - oldW;
       if (delta > 0){
@@ -983,6 +1041,8 @@ document.addEventListener('keydown', e => {
   if (/^[a-zA-Z']$/.test(k)){ e.preventDefault(); edKey(k); }
   else if (k === 'Backspace' || k === 'Delete'){ e.preventDefault(); edBack(); }
   else if (k === ' ' || k === '-' || k === '/' || k === 'Tab'){ e.preventDefault(); edBreak(); }
+  else if (k === 'ArrowLeft'){ e.preventDefault(); edMove(-1); }
+  else if (k === 'ArrowRight'){ e.preventDefault(); edMove(1); }
   else if (k === 'Enter'){ e.preventDefault(); edDone(); }
   else if (k === 'Escape'){ e.preventDefault(); closeEditor(); }
 });
@@ -1184,6 +1244,7 @@ async function removeStudent(id){
   } catch (e) { $('#whoErr').hidden = false; $('#whoErr').textContent = 'Couldn’t remove the student.'; }
 }
 function selectStudent(s){
+  closeEditor(); edRemoteSid = null;
   disconnect();
   student = s;
   ls.set('tb-last', s ? s : null);
