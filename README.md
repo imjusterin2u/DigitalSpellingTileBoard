@@ -14,6 +14,10 @@ Live page: https://imjusterin2u.github.io/DigitalSpellingTileBoard/
 - **Students**: each student's board, step and theme are saved. Open the same student on two iPads and both show the same board live.
 - **Theme**: students can pick a board theme. Tile colors never change.
 
+## Open it like an app (no tabs or address bar)
+- **iPad:** in Safari tap Share, then **Add to Home Screen**. Open **Tile Board** from the home screen icon. Pick the student once; it remembers.
+- **Laptop or Chromebook:** Teacher Tools → **Full screen**, or Chrome's **Install** option.
+
 ## Two iPads, one board
 1. Add the student once in **Teacher Tools**.
 2. Teacher iPad: tap the name button at the top and pick the student.

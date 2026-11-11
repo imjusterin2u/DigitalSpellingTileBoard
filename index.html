@@ -4,6 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Tile Board">
+<meta name="theme-color" content="#1F3550">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <title>Digital Spelling Tile Board</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -29,6 +36,7 @@ input{-webkit-user-select:text;user-select:text}
 button{font:inherit;color:inherit;cursor:pointer;touch-action:manipulation}
 button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 .app{height:100%;display:flex;flex-direction:column}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--bar);z-index:10}
 .gutter{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 
 /* Header */
@@ -320,6 +328,11 @@ input.field{flex:1;min-width:0;min-height:48px;border-radius:10px;border:1.5px s
       <h3><label for="program">Program</label></h3>
       <select class="sel" id="program"></select>
       <p class="note" id="programNote"></p>
+    </section>
+    <section class="tool">
+      <h3>Display</h3>
+      <button class="act small" id="fsBtn" hidden>⛶ Full screen</button>
+      <p class="note" id="appNote"></p>
     </section>
     <section class="tool">
       <h3>Students</h3>
@@ -1269,8 +1282,29 @@ function renderTools(){
   progSel.value = board.program || 'wrs';
   $('#programNote').textContent = (PROGRAMS[progSel.value] || PROGRAMS.wrs).note + (student ? '' : ' (Practice board: saved on this iPad.)');
   $('#toolsErr').hidden = true;
+  renderDisplay();
 }
 function closeTools(){ toolsWrap.hidden = true; }
+const isApp = () => window.navigator.standalone === true || (window.matchMedia && matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches);
+const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+const canFs = !!(document.documentElement.requestFullscreen || document.documentElement.webkitRequestFullscreen);
+function renderDisplay(){
+  const fb = $('#fsBtn');
+  fb.hidden = !canFs || isApp();
+  fb.textContent = fsEl() ? '⛶ Exit full screen' : '⛶ Full screen';
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  $('#appNote').textContent = isApp() ? 'Running as an app, with no tabs or address bar.'
+    : ios ? 'For no tabs or address bar: in Safari tap Share (□↑), then Add to Home Screen, and open Tile Board from the home screen icon.'
+    : 'Full screen hides the tabs and address bar. Press Esc to leave it. In Chrome you can also choose Install from the address bar menu.';
+}
+$('#fsBtn').addEventListener('click', async () => {
+  const d = document, el = d.documentElement;
+  try {
+    if (fsEl()) await (d.exitFullscreen ? d.exitFullscreen() : d.webkitExitFullscreen());
+    else await (el.requestFullscreen ? el.requestFullscreen() : el.webkitRequestFullscreen());
+  } catch (e) { toast('Full screen isn’t available here'); }
+});
+['fullscreenchange','webkitfullscreenchange'].forEach(ev => document.addEventListener(ev, renderDisplay));
 $('#toolsBtn').addEventListener('click', () => { renderTools(); toolsWrap.hidden = false; $('#toolsDlg').focus({ preventScroll:true }); });
 $('#toolsClose').addEventListener('click', closeTools);
 toolsWrap.addEventListener('pointerdown', e => { if (e.target === toolsWrap) closeTools(); });
